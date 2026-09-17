@@ -16,20 +16,17 @@
 - [x] Deterministic compressed timeline with movement, media, and camera events
 
 ## Milestone 5: API and preview
-- [x] Upload/analyze/result APIs
-- [x] MapLibre browser preview
-- [x] Progressive route and scooter animation
-- [x] Media overlays and basic replay control
+- [x] Upload/analyze/result APIs and MapLibre animated preview
 
 ## Milestone 6: Rendering
-- [ ] Deterministic playback capture
-- [ ] Playwright and FFmpeg pipeline
-- [ ] 1080x1920 MP4 export
-- [ ] Temporary render workspace cleanup
+- [x] Deterministic frame control
+- [x] Playwright Chromium capture
+- [x] FFmpeg H.264 MP4 encoding at 1080x1920/30fps
+- [x] Background render endpoints and frame cleanup
 
 ## Milestone 7: Hardening
 - [ ] Limits, retries, cleanup, and privacy safeguards
-- [ ] Background render job abstraction
+- [ ] Background job/status hardening
 - [ ] End-to-end fixture coverage
 - [ ] Deployment documentation
 

@@ -12,10 +12,8 @@ from app.models.trip import Trip
 class TripStore:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or Path(os.environ.get("TRIP_RECAP_DATA_DIR", "/tmp/trip-recap"))
-        self.root.mkdir(parents=True, exist_ok=True)
-        (self.root / "trips").mkdir(exist_ok=True)
-        (self.root / "workspaces").mkdir(exist_ok=True)
-        (self.root / "cache" / "routes").mkdir(parents=True, exist_ok=True)
+        for path in (self.root / "trips", self.root / "workspaces", self.root / "cache" / "routes", self.root / "renders"):
+            path.mkdir(parents=True, exist_ok=True)
 
     def workspace(self, workspace_id: str) -> Path:
         path = self.root / "workspaces" / workspace_id
@@ -27,6 +25,11 @@ class TripStore:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def render_dir(self, render_id: str) -> Path:
+        path = self.root / "renders" / render_id
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     @property
     def route_cache_dir(self) -> Path:
         return self.root / "cache" / "routes"
@@ -35,9 +38,7 @@ class TripStore:
         trip.write_json(self.trip_dir(trip.id) / "trip.json")
 
     def save_route(self, trip_id: str, route: Route) -> None:
-        (self.trip_dir(trip_id) / "route.json").write_text(
-            route.model_dump_json(indent=2), encoding="utf-8"
-        )
+        (self.trip_dir(trip_id) / "route.json").write_text(route.model_dump_json(indent=2), encoding="utf-8")
         route.write_geojson(self.trip_dir(trip_id) / "route.geojson")
 
     def save_timeline(self, trip_id: str, timeline: Timeline) -> None:

@@ -4,11 +4,12 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.preview import PREVIEW_HTML
 from app.metadata.extractor import ExifToolExtractor
+from app.renderer.service import RenderService
 from app.routing.builder import build_route
 from app.routing.cache import RouteCache
 from app.routing.osrm import OSRMRouter
@@ -18,6 +19,7 @@ from app.trip.builder import TripBuilder
 
 api = FastAPI(title="Trip Recap API", version="0.1.0")
 store = TripStore()
+render_service = RenderService(store)
 
 
 @api.get("/", response_class=HTMLResponse)
@@ -57,15 +59,13 @@ async def analyze_trip(files: list[UploadFile] = File(...)) -> dict:
         trips = TripBuilder().build(media)
         if not trips:
             raise HTTPException(status_code=422, detail="No supported media metadata could be analyzed")
-
         summaries = []
         for trip in trips:
             route = None
             route_error = None
             if len(trip.observations) >= 2:
-                router = OSRMRouter(cache=RouteCache(store.route_cache_dir))
                 try:
-                    route = await build_route(trip, router)
+                    route = await build_route(trip, OSRMRouter(cache=RouteCache(store.route_cache_dir)))
                 except Exception as exc:
                     route_error = str(exc)
             timeline = TimelineBuilder().build(trip)
@@ -73,17 +73,7 @@ async def analyze_trip(files: list[UploadFile] = File(...)) -> dict:
             if route is not None:
                 store.save_route(trip.id, route)
             store.save_timeline(trip.id, timeline)
-            summaries.append(
-                {
-                    "id": trip.id,
-                    "media_count": trip.stats.media_count,
-                    "gps_media_count": trip.stats.gps_media_count,
-                    "distance_meters": route.distance_meters if route else trip.stats.distance_meters,
-                    "started_at": trip.started_at,
-                    "ended_at": trip.ended_at,
-                    "route_error": route_error,
-                }
-            )
+            summaries.append({"id":trip.id,"media_count":trip.stats.media_count,"gps_media_count":trip.stats.gps_media_count,"distance_meters":route.distance_meters if route else trip.stats.distance_meters,"started_at":trip.started_at,"ended_at":trip.ended_at,"route_error":route_error})
         return {"workspace_id": workspace_id, "trips": summaries}
     except HTTPException:
         raise
@@ -100,32 +90,47 @@ def _trip_or_404(trip_id: str):
 
 
 @api.get("/trips/{trip_id}")
-async def get_trip(trip_id: str):
-    return _trip_or_404(trip_id)
+async def get_trip(trip_id: str): return _trip_or_404(trip_id)
 
 
 @api.get("/trips/{trip_id}/route")
 async def get_route(trip_id: str):
-    _trip_or_404(trip_id)
-    route = store.load_route_geojson(trip_id)
-    if route is None:
-        raise HTTPException(status_code=404, detail="Route not available")
+    _trip_or_404(trip_id); route=store.load_route_geojson(trip_id)
+    if route is None: raise HTTPException(status_code=404, detail="Route not available")
     return route
 
 
 @api.get("/trips/{trip_id}/timeline")
 async def get_timeline(trip_id: str):
     _trip_or_404(trip_id)
-    try:
-        return store.load_timeline(trip_id)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Timeline not available") from exc
+    try: return store.load_timeline(trip_id)
+    except FileNotFoundError as exc: raise HTTPException(status_code=404, detail="Timeline not available") from exc
 
 
 @api.get("/trips/{trip_id}/media/{media_id}")
 async def get_media(trip_id: str, media_id: str) -> FileResponse:
-    trip = _trip_or_404(trip_id)
-    media = next((item for item in trip.media if item.id == media_id), None)
-    if media is None or not media.path.exists():
-        raise HTTPException(status_code=404, detail="Media not found")
+    trip=_trip_or_404(trip_id); media=next((item for item in trip.media if item.id==media_id),None)
+    if media is None or not media.path.exists(): raise HTTPException(status_code=404, detail="Media not found")
     return FileResponse(media.path)
+
+
+@api.post("/trips/{trip_id}/render", status_code=202)
+async def create_render(trip_id: str, request: Request, background_tasks: BackgroundTasks) -> dict:
+    _trip_or_404(trip_id)
+    render_id=render_service.create_job(trip_id)
+    preview_url=str(request.url_for("preview"))
+    background_tasks.add_task(render_service.run, render_id, trip_id, preview_url)
+    return {"id": render_id, "status": "queued"}
+
+
+@api.get("/renders/{render_id}")
+async def get_render(render_id: str) -> dict:
+    try: return render_service.status(render_id)
+    except FileNotFoundError as exc: raise HTTPException(status_code=404, detail="Render not found") from exc
+
+
+@api.get("/renders/{render_id}/video")
+async def get_render_video(render_id: str) -> FileResponse:
+    path=render_service.video_path(render_id)
+    if not path.exists(): raise HTTPException(status_code=404, detail="Video not available")
+    return FileResponse(path, media_type="video/mp4", filename="trip-recap.mp4")
