@@ -1,9 +1,3 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+import streamlit as st
 
-app = FastAPI()
-
-
-@app.get("/", response_class=HTMLResponse)
-async def root() -> str:
-    return "<h1>Hello World</h1>"
+st.markdown("<h1>Hello World</h1>", unsafe_allow_html=True)
