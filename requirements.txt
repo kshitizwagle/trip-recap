@@ -1,0 +1,2 @@
+streamlit>=1.64,<2
+fastapi>=0.141,<1
