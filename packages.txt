@@ -1,0 +1,2 @@
+libimage-exiftool-perl
+ffmpeg

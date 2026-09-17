@@ -1,0 +1,1 @@
+"""Trip Recap application package."""

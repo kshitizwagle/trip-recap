@@ -8,20 +8,20 @@ This file tracks implementation work for the metadata-driven trip recap MVP.
 - [x] Add `TODO.md`
 - [x] Add `MILESTONE.md`
 - [x] Add `AGENTS.md`
-- [ ] Keep milestone status updated as work lands
+- [x] Keep milestone status updated as work lands
 
 ## Milestone 1: Metadata extraction
 
-- [ ] Create package structure under `app/`
-- [ ] Add normalized media models
-- [ ] Add ExifTool JSON runner
-- [ ] Normalize photo/video capture timestamps
-- [ ] Normalize GPS, altitude, dimensions, duration, and direction
-- [ ] Preserve metadata source fields for debugging
-- [ ] Validate GPS ranges
-- [ ] Represent missing metadata explicitly
-- [ ] Add metadata extraction API/service entry point
-- [ ] Add unit tests for normalization
+- [x] Create package structure under `app/`
+- [x] Add normalized media models
+- [x] Add ExifTool JSON runner
+- [x] Normalize photo/video capture timestamps
+- [x] Normalize GPS, altitude, dimensions, duration, and direction
+- [x] Preserve metadata source fields for debugging
+- [x] Validate GPS ranges
+- [x] Represent missing metadata explicitly
+- [x] Add metadata extraction service entry point
+- [x] Add unit tests for normalization
 
 ## Milestone 2: Trip analysis
 
@@ -94,11 +94,4 @@ This file tracks implementation work for the metadata-driven trip recap MVP.
 
 ## MVP success criteria
 
-A user can upload original trip photos/videos and, without entering coordinates or destinations, get:
-
-1. normalized metadata,
-2. chronological observations,
-3. an inferred road route,
-4. a compressed trip timeline,
-5. an animated map preview,
-6. a vertical MP4 recap.
+A user can upload original trip photos/videos and, without entering coordinates or destinations, get normalized metadata, observations, an inferred route, a timeline, a browser preview, and a vertical MP4 recap.
