@@ -13,15 +13,13 @@
 - [x] Router protocol, OSRM, caching, GeoJSON, progress projection, and tests
 
 ## Milestone 4: Timeline
-- [x] Timeline models and nonlinear time compression
-- [x] Movement, arrival/departure, media, and camera events
-- [x] Timeline serialization and tests
+- [x] Deterministic compressed timeline with movement, media, and camera events
 
 ## Milestone 5: API and preview
-- [ ] Upload/analyze/result APIs
-- [ ] MapLibre browser preview
-- [ ] Progressive route and scooter animation
-- [ ] Media overlays and basic controls
+- [x] Upload/analyze/result APIs
+- [x] MapLibre browser preview
+- [x] Progressive route and scooter animation
+- [x] Media overlays and basic replay control
 
 ## Milestone 6: Rendering
 - [ ] Deterministic playback capture
