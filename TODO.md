@@ -1,33 +1,20 @@
 # TODO
 
-This file tracks implementation work for the metadata-driven trip recap MVP.
-
 ## Milestone 0: Project foundation
-- [x] Define implementation plan
-- [x] Add project tracking and agent guidance
+- [x] Project plan, milestone tracking, and agent guidance
 
 ## Milestone 1: Metadata extraction
-- [x] Package structure and normalized media models
-- [x] ExifTool JSON runner and metadata normalization
-- [x] Timestamp/GPS provenance and validation
-- [x] Unit tests
+- [x] Normalized models, ExifTool extraction, validation, and tests
 
 ## Milestone 2: Trip analysis
-- [x] Sort media chronologically
-- [x] Calculate distance and implied speed
-- [x] Mark suspicious GPS observations
-- [x] Cluster nearby media into observations
-- [x] Segment uploads into separate trips
-- [x] Produce trip statistics
-- [x] Serialize trips through the Pydantic model
-- [x] Add clustering and segmentation tests
+- [x] Chronology, speed checks, clustering, segmentation, stats, and tests
 
 ## Milestone 3: Routing
-- [ ] Router protocol and OSRM implementation
-- [ ] Pairwise route construction and validation
-- [ ] Filesystem route cache
-- [ ] Complete GeoJSON route and route progress
-- [ ] Routing tests
+- [x] Router protocol and OSRM implementation
+- [x] Pairwise route construction and validation
+- [x] Filesystem route cache
+- [x] Complete GeoJSON route and route progress
+- [x] Routing tests
 
 ## Milestone 4: Timeline
 - [ ] Timeline models and nonlinear time compression
