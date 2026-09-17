@@ -12,7 +12,7 @@ from app.models.media import GPSQuality, MediaPoint, MediaType
 
 PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".heic", ".heif", ".png", ".webp"}
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v"}
-
+SUPPORTED_EXTENSIONS = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
 PHOTO_TIMESTAMP_FIELDS = ("DateTimeOriginal", "CreateDate", "MediaCreateDate")
 VIDEO_TIMESTAMP_FIELDS = ("MediaCreateDate", "TrackCreateDate", "CreateDate")
 
@@ -81,21 +81,14 @@ def normalize_metadata_record(record: dict[str, Any]) -> MediaPoint:
     if captured_at is None:
         warnings.append("missing_capture_time")
     return MediaPoint(
-        id=str(uuid5(NAMESPACE_URL, str(source.resolve()))),
-        filename=source.name,
-        path=source,
-        media_type=media_type,
-        captured_at=captured_at,
-        timestamp_source=timestamp_source,
-        latitude=lat,
-        longitude=lon,
-        altitude=_number(record.get("GPSAltitude"), float),
+        id=str(uuid5(NAMESPACE_URL, str(source.resolve()))), filename=source.name, path=source,
+        media_type=media_type, captured_at=captured_at, timestamp_source=timestamp_source,
+        latitude=lat, longitude=lon, altitude=_number(record.get("GPSAltitude"), float),
         direction=_number(record.get("GPSImgDirection") or record.get("GPSDestBearing"), float),
         duration_seconds=_number(record.get("Duration"), float),
         width=_number(record.get("ImageWidth") or record.get("SourceImageWidth"), int),
         height=_number(record.get("ImageHeight") or record.get("SourceImageHeight"), int),
-        gps_quality=gps_quality,
-        metadata_warnings=warnings,
+        gps_quality=gps_quality, metadata_warnings=warnings,
     )
 
 
@@ -107,12 +100,7 @@ class ExifToolExtractor:
         paths = [Path(path) for path in files]
         if not paths:
             return []
-        result = subprocess.run(
-            [self.executable, "-json", "-n", *map(str, paths)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        result = subprocess.run([self.executable, "-json", "-n", *map(str, paths)], check=True, capture_output=True, text=True)
         records = json.loads(result.stdout)
         return [normalize_metadata_record(record) for record in records]
 

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.DS_Store
+trip.json
+route.geojson
+timeline.json
+*.mp4
+*.mov
+*.heic
+*.heif
