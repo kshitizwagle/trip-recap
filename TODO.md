@@ -10,16 +10,12 @@
 - [x] Chronology, speed checks, clustering, segmentation, stats, and tests
 
 ## Milestone 3: Routing
-- [x] Router protocol and OSRM implementation
-- [x] Pairwise route construction and validation
-- [x] Filesystem route cache
-- [x] Complete GeoJSON route and route progress
-- [x] Routing tests
+- [x] Router protocol, OSRM, caching, GeoJSON, progress projection, and tests
 
 ## Milestone 4: Timeline
-- [ ] Timeline models and nonlinear time compression
-- [ ] Movement, media, and camera events
-- [ ] Timeline serialization and tests
+- [x] Timeline models and nonlinear time compression
+- [x] Movement, arrival/departure, media, and camera events
+- [x] Timeline serialization and tests
 
 ## Milestone 5: API and preview
 - [ ] Upload/analyze/result APIs
