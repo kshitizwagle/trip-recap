@@ -6,6 +6,7 @@ from typing import Iterable
 from uuid import NAMESPACE_URL, uuid5
 
 from app.models.media import GPSQuality, MediaPoint, MediaType
+from app.config import settings
 from app.models.trip import Observation, Trip, TripStats
 
 EARTH_RADIUS_METERS = 6_371_008.8
@@ -49,11 +50,17 @@ class TripBuilder:
         cluster_gap: timedelta = timedelta(minutes=30),
         trip_gap: timedelta = timedelta(hours=12),
         max_speed_kph: float = 250,
+        min_route_point_distance_meters: float | None = None,
     ) -> None:
         self.cluster_distance_meters = cluster_distance_meters
         self.cluster_gap = cluster_gap
         self.trip_gap = trip_gap
         self.max_speed_kph = max_speed_kph
+        self.min_route_point_distance_meters = (
+            settings.min_route_point_distance_meters
+            if min_route_point_distance_meters is None
+            else min_route_point_distance_meters
+        )
 
     def build(self, media: Iterable[MediaPoint]) -> list[Trip]:
         items = _mark_speed_outliers(list(media), self.max_speed_kph)
@@ -135,7 +142,65 @@ class TripBuilder:
                     media_ids=[item.id for item in cluster],
                 )
             )
-        return observations
+        return self._dedupe_negligible_route_points(observations)
+
+    def _dedupe_negligible_route_points(
+        self,
+        observations: list[Observation],
+    ) -> list[Observation]:
+        if (
+            len(observations) < 2
+            or self.min_route_point_distance_meters <= 0
+        ):
+            return observations
+
+        deduped: list[Observation] = [observations[0]]
+
+        for current in observations[1:]:
+            previous = deduped[-1]
+            distance = haversine_meters(
+                previous.latitude,
+                previous.longitude,
+                current.latitude,
+                current.longitude,
+            )
+
+            if distance >= self.min_route_point_distance_meters:
+                deduped.append(current)
+                continue
+
+            previous_count = max(len(previous.media_ids), 1)
+            current_count = max(len(current.media_ids), 1)
+            total_count = previous_count + current_count
+
+            media_ids = [
+                *previous.media_ids,
+                *[
+                    media_id
+                    for media_id in current.media_ids
+                    if media_id not in previous.media_ids
+                ],
+            ]
+            seed = ":".join(media_ids) or f"{previous.id}:{current.id}"
+
+            deduped[-1] = Observation(
+                id=str(uuid5(NAMESPACE_URL, seed)),
+                arrival=min(previous.arrival, current.arrival),
+                departure=max(previous.departure, current.departure),
+                latitude=(
+                    previous.latitude * previous_count
+                    + current.latitude * current_count
+                )
+                / total_count,
+                longitude=(
+                    previous.longitude * previous_count
+                    + current.longitude * current_count
+                )
+                / total_count,
+                media_ids=media_ids,
+            )
+
+        return deduped
 
     @staticmethod
     def _stats(media: list[MediaPoint], observations: list[Observation]) -> TripStats:

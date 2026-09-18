@@ -13,6 +13,7 @@
 - [x] Milestone 9: migrate hosted app from Streamlit to FastAPI
 
 ## FastAPI hosted app
+- [x] Deduplicate negligible consecutive GPS route points while preserving their media
 - [x] Upload up to four media files concurrently as soon as they are selected
 - [x] Extract metadata before optionally compressing photos to smaller WebP display copies
 - [x] Allow uploaded media to be discarded and exclude discarded media from routing

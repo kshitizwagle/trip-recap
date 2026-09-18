@@ -11,6 +11,12 @@ class Settings:
     data_ttl_seconds: int = int(os.environ.get("TRIP_RECAP_DATA_TTL_SECONDS", "3600"))
     route_timeout_seconds: float = float(os.environ.get("TRIP_RECAP_ROUTE_TIMEOUT_SECONDS", "20"))
     route_attempts: int = int(os.environ.get("TRIP_RECAP_ROUTE_ATTEMPTS", "3"))
+    min_route_point_distance_meters: float = float(
+        os.environ.get(
+            "TRIP_RECAP_MIN_ROUTE_POINT_DISTANCE_METERS",
+            "50",
+        )
+    )
     render_max_seconds: float = float(os.environ.get("TRIP_RECAP_RENDER_MAX_SECONDS", "90"))
     render_fps: int = int(os.environ.get("TRIP_RECAP_RENDER_FPS", "30"))
 

@@ -113,6 +113,7 @@ Environment variables:
 - `TRIP_RECAP_DATA_TTL_SECONDS` default `3600`
 - `TRIP_RECAP_ROUTE_TIMEOUT_SECONDS` default `20`
 - `TRIP_RECAP_ROUTE_ATTEMPTS` default `3`
+- `TRIP_RECAP_MIN_ROUTE_POINT_DISTANCE_METERS` default `50`; consecutive route observations closer than this are merged as negligible GPS movement
 - `TRIP_RECAP_RENDER_MAX_SECONDS` default `90`
 - `TRIP_RECAP_RENDER_FPS` default `30`
 - `CHROMIUM_PATH` optional explicit Chromium executable

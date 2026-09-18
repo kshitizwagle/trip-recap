@@ -49,3 +49,31 @@ def test_implausible_speed_is_flagged() -> None:
     flagged = next(item for item in trip.media if item.id == "b")
     assert flagged.gps_quality is GPSQuality.SUSPICIOUS
     assert "implausible_travel_speed" in flagged.metadata_warnings
+
+
+def test_negligible_consecutive_route_points_are_merged_even_with_large_time_gap() -> None:
+    first = point("a", 0, 27.670000, 85.320000)
+    second = point("b", 45, 27.670180, 85.320000)
+    third = point("c", 50, 27.680000, 85.330000)
+
+    trip = TripBuilder(
+        cluster_distance_meters=0,
+        min_route_point_distance_meters=50,
+    ).build([first, second, third])[0]
+
+    assert len(trip.observations) == 2
+    assert trip.observations[0].media_ids == ["a", "b"]
+    assert trip.observations[1].media_ids == ["c"]
+
+
+def test_nearby_point_after_real_movement_is_preserved() -> None:
+    first = point("a", 0, 27.670000, 85.320000)
+    far = point("b", 10, 27.680000, 85.330000)
+    back_near_start = point("c", 20, 27.670100, 85.320000)
+
+    trip = TripBuilder(
+        cluster_distance_meters=0,
+        min_route_point_distance_meters=50,
+    ).build([first, far, back_near_start])[0]
+
+    assert len(trip.observations) == 3
