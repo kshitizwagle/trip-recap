@@ -79,7 +79,17 @@ MAP_TEMPLATE = r"""<!doctype html>
       cursor: pointer;
       box-shadow: 0 4px 18px #0004;
     }
-    .vehicle {
+    .vehicle-marker {
+      width: 38px;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .vehicle-glyph {
+      display: block;
       font-size: 30px;
       line-height: 1;
       animation: vehicle-bob .55s ease-in-out infinite alternate;
@@ -481,12 +491,18 @@ MAP_TEMPLATE = r"""<!doctype html>
       }
 
       if (coords.length) {
-        const el = document.createElement("div");
-        el.className = "vehicle";
-        el.textContent = vehicleIcon;
+        const markerEl = document.createElement("div");
+        markerEl.className = "vehicle-marker";
+
+        const glyph = document.createElement("span");
+        glyph.className = "vehicle-glyph";
+        glyph.textContent = vehicleIcon;
+
+        markerEl.appendChild(glyph);
 
         vehicleMarker = new maplibregl.Marker({
-          element: el,
+          element: markerEl,
+          anchor: "center",
           rotationAlignment: "viewport",
           pitchAlignment: "viewport"
         })
