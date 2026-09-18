@@ -27,6 +27,23 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function formatLocalDateTime(value: string | null | undefined) {
+  if (!value) return 'Unknown';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
+}
+
 export default function TripRecapApp({
   renderOnly = false,
 }: {
@@ -1123,8 +1140,10 @@ export default function TripRecapApp({
                               ', ',
                             )}
                           </td>
-                          <td>
-                            {observation.arrival}
+                          <td title={observation.arrival}>
+                            {formatLocalDateTime(
+                              observation.arrival,
+                            )}
                           </td>
                           <td>
                             {observation.latitude.toFixed(
