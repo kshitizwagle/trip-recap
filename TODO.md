@@ -11,6 +11,9 @@
 - [x] Milestone 7: MVP hardening
 
 ## Hosted demo
+- [x] Slow down and pause the scooter at inferred stops
+- [x] Reverse-geocode stop coordinates into general place names with caching
+- [x] Use OpenFreeMap Liberty as the default basemap
 - [x] Batch upload multiple photos/videos in one selection without filename collisions
 - [x] Determine an inferred road route from valid GPS observations in capture-time order
 - [x] Run upload, metadata extraction, trip analysis, routing, and MapLibre preview directly from the Streamlit root app

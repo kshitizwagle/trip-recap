@@ -11,8 +11,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from app.config import settings
+from app.geocoding import NominatimReverseGeocoder
 from app.metadata.extractor import SUPPORTED_EXTENSIONS, ExifToolExtractor
-from app.routing.builder import build_route
+from app.routing.builder import build_route, project_observation_progress
 from app.routing.cache import RouteCache
 from app.routing.osrm import OSRMRouter
 from app.storage import TripStore
@@ -85,6 +86,17 @@ def _analyze(files, *, keep_as_one_trip: bool = True) -> list[dict]:
                 except Exception as exc:
                     route_error = str(exc)
 
+            geocoder = NominatimReverseGeocoder(store.root / "cache" / "places")
+            place_names: dict[str, str] = {}
+            for observation in trip.observations:
+                try:
+                    place_names[observation.id] = (
+                        geocoder.reverse(observation.latitude, observation.longitude)
+                        or "Unknown place"
+                    )
+                except Exception:
+                    place_names[observation.id] = "Unknown place"
+
             timeline = TimelineBuilder().build(trip)
 
             store.persist_trip_media(trip)
@@ -99,6 +111,7 @@ def _analyze(files, *, keep_as_one_trip: bool = True) -> list[dict]:
                     "route": route,
                     "timeline": timeline,
                     "route_error": route_error,
+                    "place_names": place_names,
                 }
             )
 
@@ -107,16 +120,26 @@ def _analyze(files, *, keep_as_one_trip: bool = True) -> list[dict]:
         shutil.rmtree(workspace, ignore_errors=True)
 
 
-def _map_html(trip, route) -> str:
-    observations = [
-        {
-            "id": observation.id,
-            "lat": observation.latitude,
-            "lon": observation.longitude,
-            "media_count": len(observation.media_ids),
-        }
-        for observation in trip.observations
-    ]
+def _map_html(trip, route, place_names: dict[str, str]) -> str:
+    observations = []
+    for index, observation in enumerate(trip.observations):
+        if route is not None:
+            progress = project_observation_progress(route, observation)
+        elif len(trip.observations) > 1:
+            progress = index / (len(trip.observations) - 1)
+        else:
+            progress = 0.0
+
+        observations.append(
+            {
+                "id": observation.id,
+                "lat": observation.latitude,
+                "lon": observation.longitude,
+                "media_count": len(observation.media_ids),
+                "name": place_names.get(observation.id, "Unknown place"),
+                "progress": progress,
+            }
+        )
 
     if route is not None:
         route_geojson = route.as_geojson()
@@ -185,7 +208,7 @@ def _map_html(trip, route) -> str:
 
     const map = new maplibregl.Map({{
       container: "map",
-      style: "https://demotiles.maplibre.org/style.json",
+      style: "https://tiles.openfreemap.org/styles/liberty",
       center: coords.length ? coords[0] : [85.324, 27.676],
       zoom: coords.length ? 8 : 6,
       attributionControl: true
@@ -338,6 +361,7 @@ def _render_result(result: dict, index: int) -> None:
     route = result["route"]
     timeline = result["timeline"]
     route_error = result["route_error"]
+    place_names = result["place_names"]
 
     st.subheader(f"Trip {index + 1}")
 
@@ -374,12 +398,13 @@ def _render_result(result: dict, index: int) -> None:
     if len(trip.observations) == 0:
         st.warning("No usable GPS observations were found in this trip.")
     else:
-        components.html(_map_html(trip, route), height=640, scrolling=False)
+        components.html(_map_html(trip, route, place_names), height=700, scrolling=False)
 
         with st.expander("Route observations"):
             rows = [
                 {
                     "order": index + 1,
+                    "place": place_names.get(observation.id, "Unknown place"),
                     "captured_at": observation.arrival,
                     "latitude": round(observation.latitude, 6),
                     "longitude": round(observation.longitude, 6),
