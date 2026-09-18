@@ -120,7 +120,7 @@ def _analyze(files, *, keep_as_one_trip: bool = True) -> list[dict]:
         shutil.rmtree(workspace, ignore_errors=True)
 
 
-def _map_html(trip, route, place_names: dict[str, str]) -> str:
+def _map_html(trip, route, place_names: dict[str, str], vehicle: str) -> str:
     observations = []
     for index, observation in enumerate(trip.observations):
         if route is not None:
@@ -153,6 +153,7 @@ def _map_html(trip, route, place_names: dict[str, str]) -> str:
 
     route_json = json.dumps(route_geojson)
     observations_json = json.dumps(observations)
+    vehicle_json = json.dumps(vehicle)
 
     return f"""
 <!doctype html>
@@ -204,6 +205,7 @@ def _map_html(trip, route, place_names: dict[str, str]) -> str:
   <script>
     const route = {route_json};
     const observations = {observations_json};
+    const vehicleIcon = {vehicle_json};
     const coords = route.geometry.coordinates || [];
 
     const map = new maplibregl.Map({{
@@ -356,7 +358,7 @@ def _map_html(trip, route, place_names: dict[str, str]) -> str:
 """
 
 
-def _render_result(result: dict, index: int) -> None:
+def _render_result(result: dict, index: int, vehicle: str) -> None:
     trip = result["trip"]
     route = result["route"]
     timeline = result["timeline"]
@@ -398,7 +400,7 @@ def _render_result(result: dict, index: int) -> None:
     if len(trip.observations) == 0:
         st.warning("No usable GPS observations were found in this trip.")
     else:
-        components.html(_map_html(trip, route, place_names), height=700, scrolling=False)
+        components.html(_map_html(trip, route, place_names, vehicle), height=700, scrolling=False)
 
         with st.expander("Route observations"):
             rows = [
@@ -470,11 +472,30 @@ def render_app() -> None:
     if uploaded_files:
         st.caption(f"{len(uploaded_files)} media files selected. They will be ordered by capture timestamp.")
 
-    keep_as_one_trip = st.toggle(
-        "Treat all selected media as one trip",
-        value=True,
-        help="Turn this off to split uploads into separate trips when there is a gap longer than 12 hours.",
-    )
+    controls_left, controls_right = st.columns(2)
+
+    with controls_left:
+        keep_as_one_trip = st.toggle(
+            "Treat all selected media as one trip",
+            value=True,
+            help="Turn this off to split uploads into separate trips when there is a gap longer than 12 hours.",
+        )
+
+    with controls_right:
+        vehicle_label = st.selectbox(
+            "Animation vehicle",
+            options=["Scooter", "Car", "Motorcycle", "Bicycle", "Jeep"],
+            index=0,
+        )
+
+    vehicle_icons = {
+        "Scooter": "🛵",
+        "Car": "🚗",
+        "Motorcycle": "🏍️",
+        "Bicycle": "🚲",
+        "Jeep": "🚙",
+    }
+    vehicle = vehicle_icons[vehicle_label]
 
     analyze = st.button(
         "Determine route",
@@ -498,7 +519,7 @@ def render_app() -> None:
     if results:
         st.divider()
         for index, result in enumerate(results):
-            _render_result(result, index)
+            _render_result(result, index, vehicle)
 
     st.caption(
         "GPS metadata is processed temporarily. No manual coordinates or route stops are required."

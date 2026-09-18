@@ -11,6 +11,10 @@
 - [x] Milestone 7: MVP hardening
 
 ## Hosted demo
+- [x] Keep vehicle upright while moving instead of rotating with route bearing
+- [x] Add selectable scooter/car/motorcycle/bicycle/jeep animation vehicles
+- [x] Render general place-name labels directly on map stops
+- [x] Use distance-based route interpolation and slow/pause at stops
 - [x] Slow down and pause the scooter at inferred stops
 - [x] Reverse-geocode stop coordinates into general place names with caching
 - [x] Use OpenFreeMap Liberty as the default basemap
