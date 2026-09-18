@@ -23,13 +23,11 @@ WORKDIR /app
 
 COPY pyproject.toml .python-version ./
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project --no-dev
+RUN uv sync --no-install-project --no-dev
 
 COPY . .
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev
+RUN uv sync --no-dev
 
 
 # ---- Runtime stage ----
