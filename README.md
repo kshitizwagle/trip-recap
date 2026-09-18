@@ -2,35 +2,31 @@
 
 Metadata-driven road-trip reconstruction and recap generation.
 
-Upload original photos/videos and Trip Recap uses their capture times and GPS metadata to reconstruct chronological observations, infer the road route between them, animate the trip, and export a vertical MP4.
+Upload original photos/videos and Trip Recap uses capture times and GPS metadata to reconstruct chronological observations, infer the road route between them, animate the trip, and export a vertical MP4.
 
-## Current MVP
+## Current architecture
 
-Implemented pipeline:
+The hosted app is now FastAPI end to end:
 
 ```text
-media upload
+browser UI served by FastAPI
+-> multipart media upload with per-file progress
 -> ExifTool metadata normalization
 -> trip clustering and segmentation
 -> OSRM road routing
--> route.geojson
--> compressed timeline
--> MapLibre preview
--> Playwright frame capture
--> FFmpeg MP4
+-> Nominatim place labels
+-> MapLibre Street / Satellite / Hybrid preview
+-> deterministic timeline
+-> optional Playwright + FFmpeg MP4 render
 ```
 
-No manual coordinates or route stops are required.
+No Streamlit runtime is used.
 
 ## Run locally
 
-System dependencies:
+Python 3.12 is pinned in `.python-version`.
 
-- ExifTool
-- FFmpeg
-- Chromium
-
-Python dependencies:
+Install Python dependencies:
 
 ```bash
 python -m venv .venv
@@ -38,27 +34,43 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run the hosted-style Streamlit UI:
+The metadata pipeline currently also expects the `exiftool` executable. MP4 rendering expects Chromium and FFmpeg.
+
+Run:
 
 ```bash
-streamlit run main.py
+fastapi dev
 ```
 
-The root page handles upload, metadata extraction, trip reconstruction, OSRM routing, and MapLibre preview directly in the Streamlit process.
+Then open:
 
-The FastAPI application remains available for normal ASGI hosting:
+```text
+http://127.0.0.1:8000/
+```
+
+API docs are available at `/docs`.
+
+## FastAPI Cloud
+
+The repository exposes `app` from the root `main.py`, so FastAPI Cloud can auto-detect it.
+
+Deploy with:
 
 ```bash
-uvicorn app.api.app:api --host 0.0.0.0 --port 8000
+fastapi deploy
 ```
 
-## Tests
+The dependency is `fastapi[standard]`, which includes the FastAPI CLI used by FastAPI Cloud.
 
-```bash
-PYTHONPATH=. pytest -q
-```
+### Runtime binary note
 
-Tests use synthetic metadata and mocked routing so they do not depend on live OSRM or private media fixtures.
+The Python/FastAPI deployment is configured for FastAPI Cloud, but Trip Recap still uses external binaries for some features:
+
+- ExifTool for JPEG/HEIC/MOV/MP4 metadata extraction
+- Chromium + Playwright for deterministic frame capture
+- FFmpeg for MP4 encoding
+
+FastAPI Cloud's documented dependency flow is Python-package based. Verify those binaries are available in the deployed runtime before relying on metadata extraction or MP4 export there. If they are not, the next step is replacing/vendoring those runtime dependencies or moving rendering to a worker that provides them.
 
 ## Configuration
 
@@ -74,18 +86,14 @@ Environment variables:
 - `TRIP_RECAP_RENDER_FPS` default `30`
 - `CHROMIUM_PATH` optional explicit Chromium executable
 
-## Streamlit Community Cloud
+## Tests
 
-The repository includes `requirements.txt` and `packages.txt`. Configure `main.py` as the Streamlit entry point.
+```bash
+PYTHONPATH=. pytest -q
+```
 
-Community Cloud runs the trip builder directly on `/`. The deployed demo does not rely on custom FastAPI or Starlette routes.
-
-Rendering is resource intensive. Community Cloud is useful for analysis and preview, but production MP4 rendering should eventually move to a dedicated worker/runtime.
+Tests use synthetic metadata and mocked routing so they do not depend on live OSRM or private media fixtures.
 
 ## Privacy
 
-Uploaded media may contain precise location data. See `PRIVACY.md`. The default implementation stores media and derived GPS/route artifacts temporarily and cleans expired data on later requests.
-
-## Development
-
-Read `AGENTS.md`, `MILESTONE.md`, and `TODO.md` before changing architecture or milestone scope.
+Uploaded media may contain precise location data. See `PRIVACY.md`. Source media and derived GPS/route artifacts are temporary by default and are removed after the configured TTL.

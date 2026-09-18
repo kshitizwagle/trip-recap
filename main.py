@@ -1,4 +1,3 @@
-from dashboard import render_app
+from app.api.app import api as app
 
-
-render_app()
+__all__ = ["app"]

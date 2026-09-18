@@ -6,13 +6,21 @@ client = TestClient(api)
 
 
 def test_health() -> None:
-    response = client.get("/health")
+    response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
-def test_preview_contains_maplibre() -> None:
-    response = client.get("/preview")
+def test_root_contains_fastapi_trip_ui() -> None:
+    response = client.get("/")
     assert response.status_code == 200
     assert "maplibre-gl" in response.text
-    assert "Analyze trip" in response.text
+    assert "Determine route" in response.text
+    assert "/api/trips/analyze" in response.text
+
+
+def test_preview_alias_contains_renderer_contract() -> None:
+    response = client.get("/preview")
+    assert response.status_code == 200
+    assert "window.setTripTime" in response.text
+    assert "window.tripReady" in response.text
