@@ -6,44 +6,73 @@ Upload original photos/videos and Trip Recap uses capture times and GPS metadata
 
 ## Current architecture
 
-The hosted app is now FastAPI end to end:
+The production container is a single-process FastAPI deployment with a statically exported Next.js frontend:
 
 ```text
-browser UI served by FastAPI
--> concurrent retryable 2 MiB chunk uploads with discard support
--> ExifTool metadata normalization in the container when route generation starts
--> trip clustering and segmentation
--> OSRM road routing
--> Nominatim place labels
--> MapLibre Street / Satellite / Hybrid preview
--> deterministic timeline
--> optional Playwright + FFmpeg MP4 render
+Next.js 16 + React 19 + Sonner
+  build-time static export only
+        ↓
+FastAPI / Uvicorn
+  serves frontend/out + JSON APIs
+        ↓
+retryable 2 MiB chunk uploads in /tmp
+        ↓
+ExifTool metadata extraction at route time
+        ↓
+trip clustering + OSRM road routing
+        ↓
+Photon autocomplete + Nominatim reverse labels
+        ↓
+MapLibre Street / Satellite / Hybrid preview
+        ↓
+optional Playwright + FFmpeg MP4 render
 ```
 
-No Streamlit runtime is used.
+There is **no Node.js server in production**. Node is used only in the Docker frontend build stage. The final container runs one Uvicorn process.
 
-The browser only uploads raw media and shows transfer progress. Each file is sent as sequential 2 MiB chunks with per-chunk retries, while up to four files can upload concurrently. Files larger than 25 MB are rejected before upload and by the backend. ExifTool metadata extraction, GPS parsing, image optimization, clustering, and routing run in the container only when the user clicks Determine route. Start and end points accept either a place name or `latitude, longitude`. If omitted, the first and last media-derived GPS points are used. Raw upload chunks and assembled source files live only under `/tmp/trip-recap/workspaces`. After successful route processing the raw workspace is deleted immediately. Trip media and render artifacts remain under `/tmp/trip-recap` only until TTL cleanup.
+The frontend is componentized under `frontend/` and uses:
+- Next.js 16 static export
+- React 19
+- MapLibre GL JS
+- Sonner for transient notifications such as skipped files, upload failures, discarded media, stale uploads, route results, and render completion
 
-Route tracing and presentation controls are separated. Media uploads begin immediately with up to four concurrent uploads. Metadata is extracted from the original file first, then photos are optionally reduced to a smaller WebP display copy when that saves space. Discarded uploads disappear from the UI and are excluded from routing. Start/end points can be selected from geotagged media, including a loop that returns to the selected start. Map style and place-name granularity can change without rerunning OSRM. Playback has speed controls, optional slowdown at image-derived GPS points, and the vehicle flips to face its current route direction.
+Uploads begin immediately. Up to four files upload concurrently, while each file itself is sent sequentially in 2 MiB chunks. A failed chunk is retried up to three times without restarting the entire file. Files over 25 MB are rejected in the browser and again by FastAPI.
+
+All runtime media and derived artifacts live under `/tmp/trip-recap`. Raw upload chunks and assembled source files live under `/tmp/trip-recap/workspaces`. After successful route processing, that raw workspace is deleted immediately. Persisted trip media, route data, renders, and caches are also temporary and are cleaned by a lightweight FastAPI lifespan cleanup loop according to the configured TTL.
+
+Metadata extraction, GPS parsing, image optimization, clustering, and routing run inside the container only when the user clicks **Determine route**. Failed, skipped, discarded, expired, or otherwise missing uploads are filtered out and are never referenced during route generation.
+
+Start and end points accept either a place name or `latitude, longitude`. Place-name inputs provide autocomplete suggestions and display the selected coordinates. The loop option can return to the chosen start point. Map style and place-name detail remain presentation controls and do not rerun OSRM routing.
 
 ## Run locally
 
-Python 3.12 is pinned in `.python-version`. Python and project dependencies are managed with `uv`.
+Python 3.12 is pinned in `.python-version`. Python dependencies are managed with `uv`.
 
-Install Python and sync the project:
+Install Python and sync the backend:
 
 ```bash
 uv python install 3.12
 uv sync --extra dev
 ```
 
-The metadata pipeline currently also expects the `exiftool` executable. MP4 rendering expects Chromium and FFmpeg.
+Build the static frontend:
 
-Run:
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+Then run FastAPI:
 
 ```bash
 uv run fastapi dev
 ```
+
+If `frontend/out` is missing, FastAPI keeps the legacy HTML fallback for development and tests. Production Docker builds always include the static Next export.
+
+The metadata pipeline expects the `exiftool` executable. MP4 rendering expects Chromium and FFmpeg.
 
 Then open:
 
@@ -55,12 +84,13 @@ API docs are available at `/docs`.
 
 ## Docker
 
-The Docker image uses a multi-stage build:
+The Docker image uses three stages:
 
-- builder: `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`
+- frontend builder: `node:22-bookworm-slim`, used only to build the Next static export
+- Python builder: `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`
 - runtime: `python:3.12-slim-bookworm`
-- `uv` builds the virtual environment only in the builder stage
-- the runtime receives the finished `.venv`, not `uv`
+- the runtime receives `frontend/out` and the finished Python `.venv`
+- Node and `uv` are not required by the running application
 - ExifTool, FFmpeg, Chromium, runtime libraries, and fonts are installed in the runtime image
 
 Build:
@@ -111,7 +141,7 @@ Environment variables:
 
 - `TRIP_RECAP_MAX_FILES` default `100`
 - `TRIP_RECAP_MAX_FILE_BYTES` hard maximum `25 MiB`
-- `TRIP_RECAP_DATA_TTL_SECONDS` default `3600`
+- `TRIP_RECAP_DATA_TTL_SECONDS` default `3600`; expired `/tmp` workspaces, trips, renders, and caches are purged periodically
 - `TRIP_RECAP_ROUTE_TIMEOUT_SECONDS` default `20`
 - `TRIP_RECAP_ROUTE_ATTEMPTS` default `3`
 - `TRIP_RECAP_MIN_ROUTE_POINT_DISTANCE_METERS` default `50`; consecutive route observations closer than this are merged as negligible GPS movement
