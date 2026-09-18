@@ -15,3 +15,7 @@ timeline.json
 *.mov
 *.heic
 *.heif
+
+frontend/node_modules
+frontend/.next
+frontend/out
