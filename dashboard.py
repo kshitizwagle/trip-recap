@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+from datetime import timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,6 +20,22 @@ from app.timeline.builder import TimelineBuilder
 from app.trip.builder import TripBuilder
 
 
+def _unique_upload_target(upload_dir: Path, original_name: str) -> Path:
+    name = Path(original_name).name
+    candidate = upload_dir / name
+    if not candidate.exists():
+        return candidate
+
+    stem = Path(name).stem
+    suffix = Path(name).suffix
+    counter = 2
+    while True:
+        candidate = upload_dir / f"{stem}-{counter}{suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
 def _save_uploads(files, upload_dir: Path) -> list[Path]:
     paths: list[Path] = []
     for uploaded in files:
@@ -29,13 +46,13 @@ def _save_uploads(files, upload_dir: Path) -> list[Path]:
         data = uploaded.getbuffer()
         if len(data) > settings.max_file_bytes:
             raise ValueError(f"File too large: {name}")
-        target = upload_dir / name
+        target = _unique_upload_target(upload_dir, name)
         target.write_bytes(data)
         paths.append(target)
     return paths
 
 
-def _analyze(files) -> list[dict]:
+def _analyze(files, *, keep_as_one_trip: bool = True) -> list[dict]:
     store = TripStore()
     store.cleanup_expired(settings.data_ttl_seconds)
 
@@ -46,7 +63,8 @@ def _analyze(files) -> list[dict]:
     try:
         paths = _save_uploads(files, upload_dir)
         media = ExifToolExtractor().extract_sync(paths)
-        trips = TripBuilder().build(media)
+        trip_gap = timedelta(days=36500) if keep_as_one_trip else timedelta(hours=12)
+        trips = TripBuilder(trip_gap=trip_gap).build(media)
 
         if not trips:
             raise ValueError("No supported media metadata could be analyzed.")
@@ -326,11 +344,23 @@ def _render_result(result: dict, index: int) -> None:
     distance_meters = route.distance_meters if route is not None else trip.stats.distance_meters
     distance_km = distance_meters / 1000
 
-    col1, col2, col3, col4 = st.columns(4)
+    segment_count = len(route.segments) if route is not None else max(len(trip.observations) - 1, 0)
+
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Media", trip.stats.media_count)
     col2.metric("GPS media", trip.stats.gps_media_count)
-    col3.metric("Observations", len(trip.observations))
-    col4.metric("Route", f"{distance_km:.1f} km")
+    col3.metric("Stops", len(trip.observations))
+    col4.metric("Segments", segment_count)
+    col5.metric("Route", f"{distance_km:.1f} km")
+
+    if len(trip.observations) >= 2:
+        source = "OSRM road routing" if route is not None else "straight GPS fallback"
+        st.success(
+            f"Route determined from {trip.stats.gps_media_count} geotagged media, "
+            f"ordered by capture time, across {len(trip.observations)} stops using {source}."
+        )
+    elif len(trip.observations) == 1:
+        st.info("Only one distinct GPS stop was found. At least two stops are needed to determine a route.")
 
     if trip.started_at and trip.ended_at:
         st.caption(f"{trip.started_at} to {trip.ended_at}")
@@ -345,6 +375,19 @@ def _render_result(result: dict, index: int) -> None:
         st.warning("No usable GPS observations were found in this trip.")
     else:
         components.html(_map_html(trip, route), height=640, scrolling=False)
+
+        with st.expander("Route observations"):
+            rows = [
+                {
+                    "order": index + 1,
+                    "captured_at": observation.arrival,
+                    "latitude": round(observation.latitude, 6),
+                    "longitude": round(observation.longitude, 6),
+                    "media": len(observation.media_ids),
+                }
+                for index, observation in enumerate(trip.observations)
+            ]
+            st.dataframe(rows, use_container_width=True, hide_index=True)
 
     warnings = [
         f"{item.filename}: {', '.join(item.metadata_warnings)}"
@@ -393,14 +436,23 @@ def render_app() -> None:
     )
 
     uploaded_files = st.file_uploader(
-        "Photos and videos",
+        "Drop all photos and videos from the trip",
         type=["jpg", "jpeg", "heic", "heif", "png", "webp", "mov", "mp4", "m4v"],
         accept_multiple_files=True,
         help="Use original files when possible so GPS and capture metadata are preserved.",
     )
 
+    if uploaded_files:
+        st.caption(f"{len(uploaded_files)} media files selected. They will be ordered by capture timestamp.")
+
+    keep_as_one_trip = st.toggle(
+        "Treat all selected media as one trip",
+        value=True,
+        help="Turn this off to split uploads into separate trips when there is a gap longer than 12 hours.",
+    )
+
     analyze = st.button(
-        "Analyze trip",
+        "Determine route",
         type="primary",
         disabled=not uploaded_files,
         use_container_width=True,
@@ -412,7 +464,7 @@ def render_app() -> None:
         else:
             try:
                 with st.spinner("Reading metadata and reconstructing the trip..."):
-                    st.session_state["trip_results"] = _analyze(uploaded_files)
+                    st.session_state["trip_results"] = _analyze(uploaded_files, keep_as_one_trip=keep_as_one_trip)
             except Exception as exc:
                 st.session_state.pop("trip_results", None)
                 st.exception(exc)

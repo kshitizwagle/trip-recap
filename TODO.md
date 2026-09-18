@@ -11,6 +11,8 @@
 - [x] Milestone 7: MVP hardening
 
 ## Hosted demo
+- [x] Batch upload multiple photos/videos in one selection without filename collisions
+- [x] Determine an inferred road route from valid GPS observations in capture-time order
 - [x] Run upload, metadata extraction, trip analysis, routing, and MapLibre preview directly from the Streamlit root app
 - [x] Remove Streamlit Community Cloud dependence on custom `/api/*` routes
 - [ ] Validate hosted analysis with original iPhone HEIC/MOV files
