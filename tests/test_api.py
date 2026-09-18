@@ -21,6 +21,9 @@ def test_root_contains_fastapi_trip_ui() -> None:
     assert "MAX_FILE_BYTES=25*1024*1024" in response.text
     assert "Max 25 MB per file" in response.text
     assert "start_location" in response.text
+    assert "/api/locations/suggest" in response.text
+    assert "start-coordinates" in response.text
+    assert "end-coordinates" in response.text
     assert "pollUploadStatus" not in response.text
     assert "readApiResponse" in response.text
     assert "response.json()" not in response.text
@@ -46,3 +49,31 @@ def test_public_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_location_suggestions(monkeypatch) -> None:
+    def fake_search(self, query: str, *, limit: int = 5):
+        assert query == "Patan"
+        assert limit == 5
+        return [
+            {
+                "label": "Patan Durbar Square, Lalitpur, Nepal",
+                "latitude": 27.673,
+                "longitude": 85.325,
+                "type": "attraction",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "app.api.app.PhotonPlaceSearch.search",
+        fake_search,
+    )
+
+    response = client.get(
+        "/api/locations/suggest",
+        params={"q": "Patan", "limit": 5},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["suggestions"][0]["latitude"] == 27.673
+    assert response.json()["suggestions"][0]["longitude"] == 85.325
