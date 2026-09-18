@@ -65,6 +65,8 @@ const qs=new URLSearchParams(location.search),renderMode=qs.get("render")==="1";
 const els={fileInput:document.getElementById("file-input"),dropZone:document.getElementById("drop-zone"),mediaGrid:document.getElementById("media-grid"),analyze:document.getElementById("analyze"),status:document.getElementById("status"),result:document.getElementById("result"),startPoint:document.getElementById("start-point"),startSuggestions:document.getElementById("start-suggestions"),startCoordinates:document.getElementById("start-coordinates"),endPoint:document.getElementById("end-point"),endSuggestions:document.getElementById("end-suggestions"),endCoordinates:document.getElementById("end-coordinates"),returnStart:document.getElementById("return-start"),keepOne:document.getElementById("keep-one"),vehicle:document.getElementById("vehicle"),placeDetail:document.getElementById("place-detail"),mapStyle:document.getElementById("map-style"),replay:document.getElementById("replay"),playbackSpeed:document.getElementById("playback-speed"),slowPoints:document.getElementById("slow-points"),fit:document.getElementById("fit"),render:document.getElementById("render"),videoDownload:document.getElementById("video-download"),observationsBody:document.getElementById("observations-body"),jsonView:document.getElementById("json-view"),mediaOverlay:document.getElementById("media-overlay")};
 const MAX_CONCURRENT_UPLOADS=4;
 const MAX_FILE_BYTES=25*1024*1024;
+const UPLOAD_CHUNK_BYTES=2*1024*1024;
+const UPLOAD_CHUNK_RETRIES=3;
 const state={sessionId:crypto.randomUUID(),uploads:[],uploadQueue:[],activeUploads:0,current:null,map:null,marker:null,vehicleGlyph:null,markers:[],placeLabels:new Map(),raf:null,routeBounds:null,cumulative:[],totalDistance:0,jsonTab:"trip",placeRequestSeq:0};
 window.tripReady=false;window.tripData=null;window.routeData=null;window.timelineData=null;
 function humanSize(bytes){const units=["B","KB","MB","GB"];let value=bytes,i=0;while(value>=1024&&i<units.length-1){value/=1024;i++}return value.toFixed(1)+" "+units[i]}
@@ -244,7 +246,7 @@ function addFiles(fileList){
   const rejected=files.filter(file=>file.size>MAX_FILE_BYTES);
 
   accepted.forEach(file=>{
-    const record={clientId:crypto.randomUUID(),file,status:"queued",discarded:false,serverId:null,xhr:null,objectUrl:null,finished:false};
+    const record={clientId:crypto.randomUUID(),file,status:"queued",discarded:false,serverId:null,controller:null,objectUrl:null,finished:false};
     state.uploads.push(record);
     state.uploadQueue.push(record);
     createCard(record);
@@ -264,66 +266,137 @@ function addFiles(fileList){
 }
 function finishUploadSlot(record){if(record.finished)return;record.finished=true;state.activeUploads=Math.max(0,state.activeUploads-1);pumpUploadQueue();updateAnalyzeState()}
 function pumpUploadQueue(){while(state.activeUploads<MAX_CONCURRENT_UPLOADS&&state.uploadQueue.length){const record=state.uploadQueue.shift();if(!record||record.discarded)continue;startUpload(record)}}
-function startUpload(record){
+async function uploadChunkWithRetry(record,uploadId,chunkIndex,totalChunks){
+  const start=chunkIndex*UPLOAD_CHUNK_BYTES;
+  const end=Math.min(record.file.size,start+UPLOAD_CHUNK_BYTES);
+  const chunk=record.file.slice(start,end);
+
+  let lastError=null;
+  for(let attempt=1;attempt<=UPLOAD_CHUNK_RETRIES;attempt++){
+    if(record.discarded)throw new DOMException("Upload aborted","AbortError");
+    try{
+      const response=await fetch(
+        "/api/upload-sessions/"+state.sessionId+"/media/"+uploadId+"/chunks/"+chunkIndex,
+        {
+          method:"PUT",
+          headers:{"Content-Type":"application/octet-stream"},
+          body:chunk,
+          signal:record.controller.signal,
+        },
+      );
+      if(!response.ok){
+        const parsed=await readApiResponse(response);
+        throw new Error(parsed.detail||("Chunk upload failed · HTTP "+response.status));
+      }
+
+      const uploadedBytes=end;
+      const percent=record.file.size?uploadedBytes/record.file.size*100:100;
+      setProgress(
+        record,
+        percent,
+        "Uploading chunk "+(chunkIndex+1)+"/"+totalChunks+" · "+Math.round(percent)+"%",
+      );
+      return;
+    }catch(error){
+      if(error.name==="AbortError")throw error;
+      lastError=error;
+      if(attempt<UPLOAD_CHUNK_RETRIES){
+        setProgress(
+          record,
+          start/record.file.size*100,
+          "Retrying chunk "+(chunkIndex+1)+" · attempt "+(attempt+1)+"/"+UPLOAD_CHUNK_RETRIES,
+        );
+        await new Promise(resolve=>setTimeout(resolve,350*attempt));
+      }
+    }
+  }
+
+  throw lastError||new Error("Chunk upload failed");
+}
+
+async function startUpload(record){
   state.activeUploads++;
   record.status="uploading";
   record.finished=false;
-  setProgress(record,1,"Uploading…");
+  record.controller=new AbortController();
+  setProgress(record,1,"Preparing chunked upload…");
 
-  const form=new FormData();
-  form.append("file",record.file,record.file.name);
-
-  const xhr=new XMLHttpRequest();
-  record.xhr=xhr;
-  xhr.open("POST","/api/upload-sessions/"+state.sessionId+"/media");
-  xhr.responseType="json";
-
-  xhr.upload.onprogress=event=>{
-    if(event.lengthComputable){
-      const percent=event.loaded/event.total*100;
-      setProgress(record,percent,Math.round(percent)+"% uploaded");
-    }
-  };
-
-  xhr.upload.onload=()=>{
-    if(!record.discarded)setProgress(record,100,"Upload complete · saving…");
-  };
-
-  xhr.onload=()=>{
-    if(record.discarded){
-      finishUploadSlot(record);
-      return;
+  try{
+    const initResponse=await fetch(
+      "/api/upload-sessions/"+state.sessionId+"/media/init",
+      {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          filename:record.file.name,
+          size_bytes:record.file.size,
+          chunk_size_bytes:UPLOAD_CHUNK_BYTES,
+        }),
+        signal:record.controller.signal,
+      },
+    );
+    const initParsed=await readApiResponse(initResponse);
+    if(!initParsed.ok||!initParsed.data){
+      throw new Error(initParsed.detail||"Could not start upload");
     }
 
-    const payload=xhr.response||{};
-    if(xhr.status<200||xhr.status>=300){
-      record.status="failed";
-      const detail=payload.detail||("Upload failed · HTTP "+xhr.status+(xhr.statusText?" "+xhr.statusText:""));
-      setProgress(record,0,detail);
-      finishUploadSlot(record);
-      return;
+    record.serverId=initParsed.data.id;
+    const totalChunks=initParsed.data.total_chunks;
+
+    for(let chunkIndex=0;chunkIndex<totalChunks;chunkIndex++){
+      await uploadChunkWithRetry(
+        record,
+        record.serverId,
+        chunkIndex,
+        totalChunks,
+      );
     }
 
-    record.serverId=payload.id;
+    setProgress(record,100,"Finalizing upload…");
+    const completeResponse=await fetch(
+      "/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId+"/complete",
+      {
+        method:"POST",
+        signal:record.controller.signal,
+      },
+    );
+    const completeParsed=await readApiResponse(completeResponse);
+    if(!completeParsed.ok||!completeParsed.data){
+      throw new Error(completeParsed.detail||"Could not finalize upload");
+    }
+
     record.status="uploaded";
     setProgress(record,100,"Uploaded");
     const note=cardFor(record)?.querySelector(".storage-note");
-    if(note)note.textContent="Stored "+humanSize(payload.stored_bytes||record.file.size);
-    finishUploadSlot(record);
-  };
-
-  xhr.onerror=()=>{
-    if(!record.discarded){
-      record.status="failed";
-      setProgress(record,0,"Upload failed");
+    if(note){
+      note.textContent=
+        "Stored "+humanSize(completeParsed.data.stored_bytes||record.file.size)+
+        " in temporary storage";
     }
+  }catch(error){
+    if(error.name==="AbortError"){
+      if(!record.discarded){
+        record.status="failed";
+        setProgress(record,0,"Upload cancelled");
+      }
+    }else if(!record.discarded){
+      record.status="failed";
+      setProgress(record,0,error.message||"Upload failed");
+      if(record.serverId){
+        try{
+          await fetch(
+            "/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,
+            {method:"DELETE"},
+          );
+        }catch{}
+      }
+      record.serverId=null;
+    }
+  }finally{
     finishUploadSlot(record);
-  };
-
-  xhr.onabort=()=>finishUploadSlot(record);
-  xhr.send(form);
+  }
 }
-async function discardUpload(record){record.discarded=true;state.uploadQueue=state.uploadQueue.filter(item=>item!==record);if(record.xhr&&record.status==="uploading")record.xhr.abort();if(record.serverId){try{await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,{method:"DELETE"})}catch{}}if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);cardFor(record)?.remove();state.uploads=state.uploads.filter(item=>item!==record);updateAnalyzeState();clearResult();els.status.className="";els.status.textContent="Media discarded. It will not be used for the route."}
+async function discardUpload(record){record.discarded=true;state.uploadQueue=state.uploadQueue.filter(item=>item!==record);record.controller?.abort();if(record.serverId){try{await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,{method:"DELETE"})}catch{}}if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);cardFor(record)?.remove();state.uploads=state.uploads.filter(item=>item!==record);updateAnalyzeState();clearResult();els.status.className="";els.status.textContent="Media discarded. It will not be used for the route."}
 els.dropZone.addEventListener("click",()=>els.fileInput.click());els.fileInput.addEventListener("change",()=>addFiles(els.fileInput.files));["dragenter","dragover"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.add("dragging")}));["dragleave","drop"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.remove("dragging")}));els.dropZone.addEventListener("drop",event=>addFiles(event.dataTransfer.files));els.returnStart.addEventListener("change",()=>{els.endPoint.disabled=els.returnStart.checked;if(els.returnStart.checked)hideLocationSuggestions(locationFields.end)});
 async function analyze(){if(pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Checking retained uploads…";try{const uploads=await availableRetainedUploads();if(!uploads.length)throw new Error("No available uploaded media to analyze.");els.status.textContent="Extracting metadata and tracing route in the container…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_location:locationRequestValue(locationFields.start),end_location:els.returnStart.checked?null:locationRequestValue(locationFields.end),return_to_start:els.returnStart.checked};const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),parsed=await readApiResponse(response),data=parsed.data;if(!parsed.ok)throw new Error(parsed.detail||"Route analysis failed");if(!data)throw new Error("Route analysis returned an empty response");if(data.ignored_upload_count){const ignored=new Set(data.ignored_upload_ids||[]);state.uploads.filter(item=>ignored.has(item.serverId)).forEach(record=>removeUnavailableUpload(record));}els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}else throw new Error("Route analysis returned no trips")}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
 const SATELLITE_TILES="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";function satelliteStyle(){return{version:8,sources:{satellite:{type:"raster",tiles:[SATELLITE_TILES],tileSize:256,attribution:"EOX Sentinel-2 cloudless"}},layers:[{id:"satellite",type:"raster",source:"satellite"}]}}
