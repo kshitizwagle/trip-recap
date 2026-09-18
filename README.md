@@ -50,6 +50,37 @@ http://127.0.0.1:8000/
 
 API docs are available at `/docs`.
 
+## Docker
+
+The Docker image includes all current runtime dependencies:
+
+- Python 3.12
+- ExifTool
+- FFmpeg
+- Chromium
+- Chromium runtime libraries and fonts
+- all Python packages from `requirements.txt`
+
+Build:
+
+```bash
+docker build -t trip-recap .
+```
+
+Run:
+
+```bash
+docker run --rm -p 8000:8000 trip-recap
+```
+
+The container starts the app with:
+
+```text
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+`PORT` defaults to `8000`, so platforms that inject their own port can override it automatically. The container sets `CHROMIUM_PATH=/usr/bin/chromium` and stores temporary trip data under `/tmp/trip-recap`.
+
 ## FastAPI Cloud
 
 The repository exposes `app` from the root `main.py` and also declares `[tool.fastapi] entrypoint = "main:app"` in `pyproject.toml`. FastAPI Cloud should use Python 3.12 and install the application dependencies directly from `pyproject.toml`.
