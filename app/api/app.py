@@ -51,6 +51,24 @@ api = FastAPI(
     version="0.3.0",
     description="Metadata-driven road-trip reconstruction and recap generation.",
 )
+
+
+@api.exception_handler(Exception)
+async def unhandled_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": (
+                f"Internal server error: "
+                f"{type(exc).__name__}: {exc}"
+            )
+        },
+    )
+
+
 store = TripStore()
 render_service = RenderService(store)
 
@@ -193,10 +211,17 @@ async def _resolve_location(value: str | None) -> tuple[float, float] | None:
     geocoder = NominatimReverseGeocoder(
         store.root / "cache" / "places"
     )
-    result = await asyncio.to_thread(
-        geocoder.forward,
-        text,
-    )
+    try:
+        result = await asyncio.to_thread(
+            geocoder.forward,
+            text,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Location lookup failed for '{text}': {exc}",
+        ) from exc
+
     if result is None:
         raise HTTPException(
             status_code=422,
