@@ -13,6 +13,10 @@
 - [x] Milestone 9: migrate hosted app from Streamlit to FastAPI
 
 ## FastAPI hosted app
+- [x] Refactor frontend to Next.js + React static export served by FastAPI
+- [x] Use Sonner for transient toast notifications
+- [x] Upload media in retryable 2 MiB chunks
+- [x] Keep runtime files under /tmp and remove raw upload workspaces after route processing
 - [x] Move metadata extraction out of the upload request and run it in-container when route generation starts
 - [x] Enforce a hard 25 MB per-file upload limit in browser and backend
 - [x] Accept arbitrary place names or latitude/longitude for start and end points
