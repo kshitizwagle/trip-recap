@@ -31,3 +31,5 @@ jobs:
           node-version: "22"
       - run: npm install --no-audit --no-fund
       - run: npm run build
+      - run: test -f out/maplibre/maplibre-gl-worker.mjs
+      - run: test -f out/maplibre/maplibre-gl-shared.mjs
