@@ -654,10 +654,31 @@ async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
         )
 
     upload_ids = list(dict.fromkeys(request.upload_ids))
-    records = [
-        _load_upload_record(request.session_id, upload_id)
-        for upload_id in upload_ids
-    ]
+    records: list[dict] = []
+    ignored_upload_ids: list[str] = []
+
+    for upload_id in upload_ids:
+        try:
+            record = _load_upload_record(
+                request.session_id,
+                upload_id,
+            )
+        except HTTPException as exc:
+            if exc.status_code in {404, 409}:
+                ignored_upload_ids.append(upload_id)
+                continue
+            raise
+        records.append(record)
+
+    if not records:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No available retained uploads to analyze. "
+                "Missing, failed, discarded, or expired uploads were ignored."
+            ),
+        )
+
     paths = [Path(record["_path"]) for record in records]
 
     try:
@@ -759,6 +780,8 @@ async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
     return {
         "session_id": request.session_id,
         "trips": results,
+        "ignored_upload_ids": ignored_upload_ids,
+        "ignored_upload_count": len(ignored_upload_ids),
     }
 
 
