@@ -13,6 +13,7 @@
 - [x] Milestone 9: migrate hosted app from Streamlit to FastAPI
 
 ## FastAPI hosted app
+- [x] Add FastAPI Cloud pyproject configuration with explicit `main:app`, Python 3.12, and FastAPI CLI dependencies
 - [x] Serve the complete browser UI from FastAPI at `/`\n- [x] Use one multipart FastAPI request with browser-side per-file upload progress\n- [x] Preserve media preview, place labels, vehicle animation, map styles, observations, inline JSON, and optional downloads\n- [x] Expose root `main.py:app` for FastAPI Cloud auto-detection\n- [x] Remove Streamlit runtime dependency and Streamlit-specific app files\n- [ ] Validate ExifTool availability in FastAPI Cloud runtime\n- [ ] Validate Chromium and FFmpeg availability in FastAPI Cloud runtime\n\n## Legacy hosted-demo work\n- [x] Show an upload progress bar for every selected media file and per-file intake progress during analysis
 - [x] Add Street, Satellite, and Hybrid map styles using MapLibre with EOX Sentinel-2 imagery
 - [x] Force reverse-geocoded stop names to English and display only the first location segment before a comma

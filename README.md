@@ -52,7 +52,7 @@ API docs are available at `/docs`.
 
 ## FastAPI Cloud
 
-The repository exposes `app` from the root `main.py`, so FastAPI Cloud can auto-detect it.
+The repository exposes `app` from the root `main.py` and also declares `[tool.fastapi] entrypoint = "main:app"` in `pyproject.toml`. FastAPI Cloud should use Python 3.12 and install the application dependencies directly from `pyproject.toml`.
 
 Deploy with:
 
