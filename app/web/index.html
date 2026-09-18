@@ -12,7 +12,7 @@
     :root{color-scheme:dark;--bg:#0d0f12;--panel:#15181d;--panel2:#1b1f25;--border:#2a3038;--text:#f4f6f8;--muted:#9ca5b0;--ok:#7dd3a6;--danger:#f59e9e}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
     button,select,input{font:inherit}button{border:1px solid var(--border);border-radius:9px;padding:10px 14px;background:#f5f7fa;color:#0d1117;font-weight:650;cursor:pointer}button.secondary{background:var(--panel2);color:var(--text)}button.danger{background:#2b1719;color:#ffc7cc;border-color:#633038}button:disabled{opacity:.45;cursor:not-allowed}
-    select{width:100%;padding:10px;border-radius:9px;border:1px solid var(--border);background:#111419;color:var(--text)}
+    select,input[type="text"]{width:100%;padding:10px;border-radius:9px;border:1px solid var(--border);background:#111419;color:var(--text)}
     .app{max-width:1440px;margin:auto;padding:26px}.app-title{display:flex;align-items:center;gap:12px}.app-title img{width:44px;height:44px;border-radius:10px}h1{margin:0 0 6px;font-size:32px}.lead{margin:0 0 22px;color:var(--muted)}
     .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}.drop-zone{border:1px dashed #555e6a;border-radius:12px;padding:28px;text-align:center;background:#111419;cursor:pointer}.drop-zone.dragging{border-color:#fff;background:#191d23}.drop-zone strong{display:block;font-size:16px;margin-bottom:5px}.muted{color:var(--muted)}#file-input{display:none}
     .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-top:16px}.media-card{overflow:hidden;background:#101318;border:1px solid var(--border);border-radius:11px}.media-thumb{height:145px;display:flex;align-items:center;justify-content:center;background:#090b0e;color:var(--muted);overflow:hidden}.media-thumb img,.media-thumb video{width:100%;height:100%;object-fit:cover}.media-meta{padding:10px}.filename{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px;font-weight:600}.media-actions{display:flex;gap:7px;margin-top:9px}.media-actions button{padding:6px 9px;font-size:12px}
@@ -34,11 +34,11 @@
   </div>
 
   <section class="card" id="upload-card">
-    <div class="drop-zone" id="drop-zone"><strong>Drop photos and videos from the trip</strong><span class="muted">or click to choose files. Up to 4 files upload in parallel.</span><input id="file-input" type="file" multiple accept=".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*"></div>
+    <div class="drop-zone" id="drop-zone"><strong>Drop photos and videos from the trip</strong><span class="muted">or click to choose files. Max 25 MB per file. Up to 4 files upload in parallel.</span><input id="file-input" type="file" multiple accept=".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*"></div>
     <div id="media-grid" class="media-grid"></div>
     <div class="controls">
-      <label class="control">Start point<select id="start-point"><option value="">Auto · first GPS point</option></select></label>
-      <label class="control">End point<select id="end-point"><option value="">Auto · last GPS point</option></select></label>
+      <label class="control">Start point<input id="start-point" type="text" placeholder="Auto · first GPS point, place name, or lat, lon"></label>
+      <label class="control">End point<input id="end-point" type="text" placeholder="Auto · last GPS point, place name, or lat, lon"></label>
       <label class="control">Loop route<span class="checkbox"><input id="return-start" type="checkbox"> End at start point</span></label>
       <label class="control">Trip splitting<span class="checkbox"><input id="keep-one" type="checkbox" checked> Treat retained media as one trip</span></label>
       <label class="control">Animation vehicle<select id="vehicle"><option value="🛵">Scooter</option><option value="🚗">Car</option><option value="🏍️">Motorcycle</option><option value="🚲">Bicycle</option><option value="🚙">Jeep</option></select></label>
@@ -63,83 +63,41 @@
 const qs=new URLSearchParams(location.search),renderMode=qs.get("render")==="1";if(renderMode)document.body.classList.add("render-only");
 const els={fileInput:document.getElementById("file-input"),dropZone:document.getElementById("drop-zone"),mediaGrid:document.getElementById("media-grid"),analyze:document.getElementById("analyze"),status:document.getElementById("status"),result:document.getElementById("result"),startPoint:document.getElementById("start-point"),endPoint:document.getElementById("end-point"),returnStart:document.getElementById("return-start"),keepOne:document.getElementById("keep-one"),vehicle:document.getElementById("vehicle"),placeDetail:document.getElementById("place-detail"),mapStyle:document.getElementById("map-style"),replay:document.getElementById("replay"),playbackSpeed:document.getElementById("playback-speed"),slowPoints:document.getElementById("slow-points"),fit:document.getElementById("fit"),render:document.getElementById("render"),videoDownload:document.getElementById("video-download"),observationsBody:document.getElementById("observations-body"),jsonView:document.getElementById("json-view"),mediaOverlay:document.getElementById("media-overlay")};
 const MAX_CONCURRENT_UPLOADS=4;
+const MAX_FILE_BYTES=25*1024*1024;
 const state={sessionId:crypto.randomUUID(),uploads:[],uploadQueue:[],activeUploads:0,current:null,map:null,marker:null,vehicleGlyph:null,markers:[],placeLabels:new Map(),raf:null,routeBounds:null,cumulative:[],totalDistance:0,jsonTab:"trip",placeRequestSeq:0};
 window.tripReady=false;window.tripData=null;window.routeData=null;window.timelineData=null;
 function humanSize(bytes){const units=["B","KB","MB","GB"];let value=bytes,i=0;while(value>=1024&&i<units.length-1){value/=1024;i++}return value.toFixed(1)+" "+units[i]}
 function escapeHtml(value){return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
-function retainedUploads(){return state.uploads.filter(item=>!item.discarded&&item.status==="uploaded")}function pendingUploads(){return state.uploads.some(item=>!item.discarded&&(item.status==="queued"||item.status==="uploading"||item.status==="processing"))}function gpsUploads(){return retainedUploads().filter(item=>item.metadata?.has_gps).sort((a,b)=>(a.metadata.captured_at||"").localeCompare(b.metadata.captured_at||"")||a.file.name.localeCompare(b.file.name))}
+function retainedUploads(){return state.uploads.filter(item=>!item.discarded&&item.status==="uploaded")}function pendingUploads(){return state.uploads.some(item=>!item.discarded&&(item.status==="queued"||item.status==="uploading"))}
 function updateAnalyzeState(){els.analyze.disabled=pendingUploads()||retainedUploads().length===0}function clearResult(){state.current=null;window.tripReady=false;els.result.style.display="none";if(state.map){state.map.remove();state.map=null}hideMediaOverlay()}
 function cardFor(record){return document.querySelector('[data-client-id="'+record.clientId+'"]')}function setProgress(record,percent,text){const card=cardFor(record);if(!card)return;const bar=card.querySelector(".progress>div"),label=card.querySelector(".progress-text");if(bar)bar.style.width=Math.max(0,Math.min(100,percent))+"%";if(label)label.textContent=text}
 function createCard(record){const card=document.createElement("div");card.className="media-card";card.dataset.clientId=record.clientId;const thumb=document.createElement("div");thumb.className="media-thumb";const url=URL.createObjectURL(record.file);record.objectUrl=url;if(record.file.type.startsWith("video/")||/\.(mov|mp4|m4v)$/i.test(record.file.name)){const video=document.createElement("video");video.src=url;video.muted=true;video.playsInline=true;video.preload="metadata";thumb.appendChild(video)}else if(!/\.(heic|heif)$/i.test(record.file.name)){const img=document.createElement("img");img.src=url;img.alt=record.file.name;img.onerror=()=>{thumb.textContent="Preview unavailable"};thumb.appendChild(img)}else thumb.textContent="HEIC preview available after upload";const meta=document.createElement("div");meta.className="media-meta";meta.innerHTML='<div class="filename" title="'+escapeHtml(record.file.name)+'">'+escapeHtml(record.file.name)+'</div><div class="muted">'+humanSize(record.file.size)+'</div><div class="progress"><div></div></div><div class="progress-text">Queued</div><div class="storage-note"></div><div class="media-actions"><button class="danger discard">Discard</button></div>';meta.querySelector(".discard").addEventListener("click",()=>discardUpload(record));card.append(thumb,meta);els.mediaGrid.appendChild(card)}
-function addFiles(fileList){Array.from(fileList).forEach(file=>{const record={clientId:crypto.randomUUID(),file,status:"queued",discarded:false,serverId:null,metadata:null,xhr:null,objectUrl:null,finished:false};state.uploads.push(record);state.uploadQueue.push(record);createCard(record)});els.fileInput.value="";updateAnalyzeState();pumpUploadQueue()}
+function addFiles(fileList){
+  const files=Array.from(fileList);
+  const accepted=files.filter(file=>file.size<=MAX_FILE_BYTES);
+  const rejected=files.filter(file=>file.size>MAX_FILE_BYTES);
+
+  accepted.forEach(file=>{
+    const record={clientId:crypto.randomUUID(),file,status:"queued",discarded:false,serverId:null,xhr:null,objectUrl:null,finished:false};
+    state.uploads.push(record);
+    state.uploadQueue.push(record);
+    createCard(record);
+  });
+
+  els.fileInput.value="";
+  if(rejected.length){
+    els.status.className="error";
+    els.status.textContent="Skipped files over 25 MB: "+rejected.map(file=>file.name+" ("+humanSize(file.size)+")").join(", ");
+  }else if(accepted.length){
+    els.status.className="";
+    els.status.textContent="";
+  }
+
+  updateAnalyzeState();
+  pumpUploadQueue();
+}
 function finishUploadSlot(record){if(record.finished)return;record.finished=true;state.activeUploads=Math.max(0,state.activeUploads-1);pumpUploadQueue();updateAnalyzeState()}
 function pumpUploadQueue(){while(state.activeUploads<MAX_CONCURRENT_UPLOADS&&state.uploadQueue.length){const record=state.uploadQueue.shift();if(!record||record.discarded)continue;startUpload(record)}}
-async function pollUploadStatus(record){
-  while(!record.discarded&&record.status==="processing"){
-    await new Promise(resolve=>setTimeout(resolve,700));
-    if(record.discarded||!record.serverId)return;
-
-    let response;
-    try{
-      response=await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId+"/status",{cache:"no-store"});
-    }catch{
-      continue;
-    }
-
-    if(response.status===404){
-      if(!record.discarded){
-        record.status="failed";
-        setProgress(record,0,"Upload processing state was lost");
-        updateAnalyzeState();
-      }
-      return;
-    }
-
-    if(!response.ok)continue;
-    const payload=await response.json();
-
-    if(payload.state==="processing"){
-      setProgress(record,100,"Uploaded · extracting metadata…");
-      continue;
-    }
-
-    if(payload.state==="failed"){
-      record.status="failed";
-      setProgress(record,0,payload.detail||"Metadata extraction failed");
-      updateAnalyzeState();
-      return;
-    }
-
-    if(payload.state!=="ready")continue;
-
-    record.status="uploaded";
-    record.metadata=payload;
-    setProgress(record,100,payload.has_gps?"Uploaded · GPS ready":"Uploaded · no GPS");
-
-    const card=cardFor(record);
-    if(card){
-      const note=card.querySelector(".storage-note");
-      if(note){
-        note.textContent=payload.compressed
-          ? "Stored "+humanSize(payload.stored_bytes)+" after metadata extraction (from "+humanSize(payload.original_bytes)+")"
-          : "Stored "+humanSize(payload.stored_bytes);
-      }
-
-      if(/\.(heic|heif)$/i.test(record.file.name)){
-        const thumb=card.querySelector(".media-thumb");
-        thumb.innerHTML="";
-        const img=document.createElement("img");
-        img.src=payload.preview_url;
-        img.alt=record.file.name;
-        thumb.appendChild(img);
-      }
-    }
-
-    refreshPointSelectors();
-    updateAnalyzeState();
-    return;
-  }
-}
 function startUpload(record){
   state.activeUploads++;
   record.status="uploading";
@@ -162,10 +120,7 @@ function startUpload(record){
   };
 
   xhr.upload.onload=()=>{
-    if(!record.discarded){
-      record.status="processing";
-      setProgress(record,100,"Upload complete · waiting for server…");
-    }
+    if(!record.discarded)setProgress(record,100,"Upload complete · saving…");
   };
 
   xhr.onload=()=>{
@@ -184,12 +139,11 @@ function startUpload(record){
     }
 
     record.serverId=payload.id;
-    record.status="processing";
-    record.metadata=payload;
-    setProgress(record,100,"Uploaded · extracting metadata…");
-
+    record.status="uploaded";
+    setProgress(record,100,"Uploaded");
+    const note=cardFor(record)?.querySelector(".storage-note");
+    if(note)note.textContent="Stored "+humanSize(payload.stored_bytes||record.file.size);
     finishUploadSlot(record);
-    pollUploadStatus(record);
   };
 
   xhr.onerror=()=>{
@@ -203,10 +157,9 @@ function startUpload(record){
   xhr.onabort=()=>finishUploadSlot(record);
   xhr.send(form);
 }
-async function discardUpload(record){record.discarded=true;state.uploadQueue=state.uploadQueue.filter(item=>item!==record);if(record.xhr&&(record.status==="uploading"||record.status==="processing"))record.xhr.abort();if(record.serverId){try{await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,{method:"DELETE"})}catch{}}if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);cardFor(record)?.remove();state.uploads=state.uploads.filter(item=>item!==record);refreshPointSelectors();updateAnalyzeState();clearResult();els.status.className="";els.status.textContent="Media discarded. It will not be used for the route."}
-function refreshPointSelectors(){const points=gpsUploads(),startValue=els.startPoint.value,endValue=els.endPoint.value;els.startPoint.innerHTML='<option value="">Auto · first GPS point</option>';els.endPoint.innerHTML='<option value="">Auto · last GPS point</option>';points.forEach(item=>{const when=item.metadata.captured_at?" · "+new Date(item.metadata.captured_at).toLocaleString():"",label=item.file.name+when;els.startPoint.add(new Option(label,item.serverId));els.endPoint.add(new Option(label,item.serverId))});if(points.some(item=>item.serverId===startValue))els.startPoint.value=startValue;if(points.some(item=>item.serverId===endValue))els.endPoint.value=endValue;els.endPoint.disabled=els.returnStart.checked}
-els.dropZone.addEventListener("click",()=>els.fileInput.click());els.fileInput.addEventListener("change",()=>addFiles(els.fileInput.files));["dragenter","dragover"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.add("dragging")}));["dragleave","drop"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.remove("dragging")}));els.dropZone.addEventListener("drop",event=>addFiles(event.dataTransfer.files));els.returnStart.addEventListener("change",refreshPointSelectors);
-async function analyze(){const uploads=retainedUploads();if(!uploads.length||pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Tracing route from retained media…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_media_id:els.startPoint.value||null,end_media_id:els.returnStart.checked?null:(els.endPoint.value||null),return_to_start:els.returnStart.checked};try{const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),data=await response.json();if(!response.ok)throw new Error(data.detail||"Route analysis failed");els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
+async function discardUpload(record){record.discarded=true;state.uploadQueue=state.uploadQueue.filter(item=>item!==record);if(record.xhr&&record.status==="uploading")record.xhr.abort();if(record.serverId){try{await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,{method:"DELETE"})}catch{}}if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);cardFor(record)?.remove();state.uploads=state.uploads.filter(item=>item!==record);updateAnalyzeState();clearResult();els.status.className="";els.status.textContent="Media discarded. It will not be used for the route."}
+els.dropZone.addEventListener("click",()=>els.fileInput.click());els.fileInput.addEventListener("change",()=>addFiles(els.fileInput.files));["dragenter","dragover"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.add("dragging")}));["dragleave","drop"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.remove("dragging")}));els.dropZone.addEventListener("drop",event=>addFiles(event.dataTransfer.files));els.returnStart.addEventListener("change",()=>{els.endPoint.disabled=els.returnStart.checked});
+async function analyze(){const uploads=retainedUploads();if(!uploads.length||pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Extracting metadata and tracing route in the container…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_location:els.startPoint.value.trim()||null,end_location:els.returnStart.checked?null:(els.endPoint.value.trim()||null),return_to_start:els.returnStart.checked};try{const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),data=await response.json();if(!response.ok)throw new Error(data.detail||"Route analysis failed");els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
 const SATELLITE_TILES="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";function satelliteStyle(){return{version:8,sources:{satellite:{type:"raster",tiles:[SATELLITE_TILES],tileSize:256,attribution:"EOX Sentinel-2 cloudless"}},layers:[{id:"satellite",type:"raster",source:"satellite"}]}}
 function segmentDistance(a,b){const toRad=value=>value*Math.PI/180,lat1=toRad(a[1]),lat2=toRad(b[1]),dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))}function routeCoordinates(data){if(data.route?.geometry?.coordinates?.length)return data.route.geometry.coordinates;return data.observations.map(o=>[o.longitude,o.latitude])}function setupDistance(coords){state.cumulative=[0];for(let i=1;i<coords.length;i++)state.cumulative.push(state.cumulative[i-1]+segmentDistance(coords[i-1],coords[i]));state.totalDistance=state.cumulative.at(-1)||0}function positionAt(coords,progress){if(!coords.length)return null;if(coords.length===1)return{point:coords[0],index:0};const target=Math.max(0,Math.min(1,progress))*state.totalDistance;let index=0;while(index<state.cumulative.length-2&&state.cumulative[index+1]<target)index++;const a=coords[index],b=coords[index+1],start=state.cumulative[index],end=state.cumulative[index+1],length=Math.max(end-start,.000001),t=Math.max(0,Math.min(1,(target-start)/length));return{point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],index}}
 function setRouteProgress(progress){const data=state.current;if(!data||!state.marker||!state.map)return;const coords=routeCoordinates(data),result=positionAt(coords,progress);if(!result)return;state.marker.setLngLat(result.point);const nextIndex=Math.min(result.index+1,coords.length-1),a=coords[result.index],b=coords[nextIndex];if(state.vehicleGlyph&&a&&b&&state.map){const pa=state.map.project(a),pb=state.map.project(b);if(Math.abs(pb.x-pa.x)>.25)state.vehicleGlyph.style.setProperty("--direction",pb.x>=pa.x?1:-1)}const traveled=coords.slice(0,result.index+1).concat([result.point]);state.map.getSource("traveled")?.setData({type:"Feature",properties:{},geometry:{type:"LineString",coordinates:traveled}})}
