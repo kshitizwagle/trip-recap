@@ -18,6 +18,7 @@
     .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-top:16px}.media-card{overflow:hidden;background:#101318;border:1px solid var(--border);border-radius:11px}.media-thumb{height:145px;display:flex;align-items:center;justify-content:center;background:#090b0e;color:var(--muted);overflow:hidden}.media-thumb img,.media-thumb video{width:100%;height:100%;object-fit:cover}.media-meta{padding:10px}.filename{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px;font-weight:600}.media-actions{display:flex;gap:7px;margin-top:9px}.media-actions button{padding:6px 9px;font-size:12px}
     .progress{height:6px;background:#2b313a;border-radius:999px;overflow:hidden;margin-top:8px}.progress>div{height:100%;width:0;background:#e5e7eb;transition:width .1s linear}.progress-text{margin-top:4px;color:var(--muted);font-size:12px}.storage-note{margin-top:3px;color:var(--muted);font-size:11px}
     .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}label.control{display:flex;flex-direction:column;gap:6px;color:var(--muted)}.checkbox{display:flex;align-items:center;gap:8px;height:42px;color:var(--text)}#analyze{width:100%;margin-top:14px}#status{margin-top:10px;color:var(--muted);min-height:20px}.error{color:var(--danger)!important}.ok{color:var(--ok)!important}
+    .location-control{position:relative}.location-input-wrap{position:relative}.location-suggestions{display:none;position:absolute;z-index:40;top:calc(100% + 5px);left:0;right:0;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:10px;background:#111419;box-shadow:0 12px 30px rgba(0,0,0,.45)}.location-suggestions.open{display:block}.location-option{padding:10px 11px;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)}.location-option:last-child{border-bottom:0}.location-option:hover,.location-option.active{background:#20252c}.location-option-label{font-weight:600}.location-option-meta{margin-top:2px;color:var(--muted);font-size:11px}.location-coordinates{min-height:16px;color:var(--muted);font-size:11px}.location-coordinates.selected{color:var(--ok)}
     #result{display:none}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}.metric{padding:12px;border:1px solid var(--border);border-radius:10px;background:#111419}.metric .label{color:var(--muted);font-size:12px}.metric .value{font-size:22px;font-weight:700;margin-top:3px}
     .map-wrap{position:relative;height:700px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#0b0d10}#map{position:absolute;inset:0}#map-controls{position:absolute;z-index:10;top:12px;left:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}#map-controls select{width:auto;padding:9px;background:#15181d}#map-controls .checkbox-pill{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:#15181d;color:#fff}
     .vehicle-marker{width:38px;height:38px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10}.vehicle-glyph{--direction:1;display:block;font-size:30px;line-height:1;animation:vehicle-bob .55s ease-in-out infinite alternate;filter:drop-shadow(0 3px 4px rgba(0,0,0,.45));user-select:none}@keyframes vehicle-bob{from{transform:scaleX(var(--direction)) translateY(0)}to{transform:scaleX(var(--direction)) translateY(-2px)}}
@@ -37,8 +38,8 @@
     <div class="drop-zone" id="drop-zone"><strong>Drop photos and videos from the trip</strong><span class="muted">or click to choose files. Max 25 MB per file. Up to 4 files upload in parallel.</span><input id="file-input" type="file" multiple accept=".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*"></div>
     <div id="media-grid" class="media-grid"></div>
     <div class="controls">
-      <label class="control">Start point<input id="start-point" type="text" placeholder="Auto · first GPS point, place name, or lat, lon"></label>
-      <label class="control">End point<input id="end-point" type="text" placeholder="Auto · last GPS point, place name, or lat, lon"></label>
+      <label class="control location-control">Start point<div class="location-input-wrap"><input id="start-point" type="text" autocomplete="off" placeholder="Auto · first GPS point, place name, or lat, lon"><div id="start-suggestions" class="location-suggestions"></div></div><span id="start-coordinates" class="location-coordinates"></span></label>
+      <label class="control location-control">End point<div class="location-input-wrap"><input id="end-point" type="text" autocomplete="off" placeholder="Auto · last GPS point, place name, or lat, lon"><div id="end-suggestions" class="location-suggestions"></div></div><span id="end-coordinates" class="location-coordinates"></span></label>
       <label class="control">Loop route<span class="checkbox"><input id="return-start" type="checkbox"> End at start point</span></label>
       <label class="control">Trip splitting<span class="checkbox"><input id="keep-one" type="checkbox" checked> Treat retained media as one trip</span></label>
       <label class="control">Animation vehicle<select id="vehicle"><option value="🛵">Scooter</option><option value="🚗">Car</option><option value="🏍️">Motorcycle</option><option value="🚲">Bicycle</option><option value="🚙">Jeep</option></select></label>
@@ -61,7 +62,7 @@
 
 <script>
 const qs=new URLSearchParams(location.search),renderMode=qs.get("render")==="1";if(renderMode)document.body.classList.add("render-only");
-const els={fileInput:document.getElementById("file-input"),dropZone:document.getElementById("drop-zone"),mediaGrid:document.getElementById("media-grid"),analyze:document.getElementById("analyze"),status:document.getElementById("status"),result:document.getElementById("result"),startPoint:document.getElementById("start-point"),endPoint:document.getElementById("end-point"),returnStart:document.getElementById("return-start"),keepOne:document.getElementById("keep-one"),vehicle:document.getElementById("vehicle"),placeDetail:document.getElementById("place-detail"),mapStyle:document.getElementById("map-style"),replay:document.getElementById("replay"),playbackSpeed:document.getElementById("playback-speed"),slowPoints:document.getElementById("slow-points"),fit:document.getElementById("fit"),render:document.getElementById("render"),videoDownload:document.getElementById("video-download"),observationsBody:document.getElementById("observations-body"),jsonView:document.getElementById("json-view"),mediaOverlay:document.getElementById("media-overlay")};
+const els={fileInput:document.getElementById("file-input"),dropZone:document.getElementById("drop-zone"),mediaGrid:document.getElementById("media-grid"),analyze:document.getElementById("analyze"),status:document.getElementById("status"),result:document.getElementById("result"),startPoint:document.getElementById("start-point"),startSuggestions:document.getElementById("start-suggestions"),startCoordinates:document.getElementById("start-coordinates"),endPoint:document.getElementById("end-point"),endSuggestions:document.getElementById("end-suggestions"),endCoordinates:document.getElementById("end-coordinates"),returnStart:document.getElementById("return-start"),keepOne:document.getElementById("keep-one"),vehicle:document.getElementById("vehicle"),placeDetail:document.getElementById("place-detail"),mapStyle:document.getElementById("map-style"),replay:document.getElementById("replay"),playbackSpeed:document.getElementById("playback-speed"),slowPoints:document.getElementById("slow-points"),fit:document.getElementById("fit"),render:document.getElementById("render"),videoDownload:document.getElementById("video-download"),observationsBody:document.getElementById("observations-body"),jsonView:document.getElementById("json-view"),mediaOverlay:document.getElementById("media-overlay")};
 const MAX_CONCURRENT_UPLOADS=4;
 const MAX_FILE_BYTES=25*1024*1024;
 const state={sessionId:crypto.randomUUID(),uploads:[],uploadQueue:[],activeUploads:0,current:null,map:null,marker:null,vehicleGlyph:null,markers:[],placeLabels:new Map(),raf:null,routeBounds:null,cumulative:[],totalDistance:0,jsonTab:"trip",placeRequestSeq:0};
@@ -100,6 +101,103 @@ async function readApiResponse(response){
     };
   }
 }
+const locationFields={
+  start:{input:els.startPoint,suggestions:els.startSuggestions,coordinates:els.startCoordinates,selected:null,timer:null,controller:null,activeIndex:-1,items:[]},
+  end:{input:els.endPoint,suggestions:els.endSuggestions,coordinates:els.endCoordinates,selected:null,timer:null,controller:null,activeIndex:-1,items:[]},
+};
+function parseCoordinates(value){
+  const parts=value.split(",").map(part=>part.trim());
+  if(parts.length!==2)return null;
+  const latitude=Number(parts[0]),longitude=Number(parts[1]);
+  if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude<-90||latitude>90||longitude<-180||longitude>180)return null;
+  return {latitude,longitude};
+}
+function coordinateText(item){return item.latitude.toFixed(6)+", "+item.longitude.toFixed(6)}
+function hideLocationSuggestions(field){field.suggestions.classList.remove("open");field.suggestions.innerHTML="";field.items=[];field.activeIndex=-1}
+function setLocationSelection(field,item){
+  field.selected=item;
+  field.input.value=item.label;
+  field.coordinates.textContent="Coordinates: "+coordinateText(item);
+  field.coordinates.classList.add("selected");
+  hideLocationSuggestions(field);
+}
+function clearLocationSelection(field){
+  field.selected=null;
+  field.coordinates.textContent="";
+  field.coordinates.classList.remove("selected");
+}
+function renderLocationSuggestions(field,items){
+  field.items=items;
+  field.activeIndex=-1;
+  field.suggestions.innerHTML="";
+  if(!items.length){hideLocationSuggestions(field);return}
+  items.forEach((item,index)=>{
+    const option=document.createElement("div");
+    option.className="location-option";
+    option.setAttribute("role","option");
+    option.innerHTML='<div class="location-option-label">'+escapeHtml(item.label)+'</div><div class="location-option-meta">'+escapeHtml(item.type||"place")+" · "+coordinateText(item)+'</div>';
+    option.addEventListener("mousedown",event=>event.preventDefault());
+    option.addEventListener("click",()=>setLocationSelection(field,item));
+    field.suggestions.appendChild(option);
+  });
+  field.suggestions.classList.add("open");
+}
+function setActiveLocationOption(field,index){
+  const options=[...field.suggestions.querySelectorAll(".location-option")];
+  if(!options.length)return;
+  field.activeIndex=(index+options.length)%options.length;
+  options.forEach((option,i)=>option.classList.toggle("active",i===field.activeIndex));
+  options[field.activeIndex].scrollIntoView({block:"nearest"});
+}
+async function searchLocations(field,query){
+  field.controller?.abort();
+  field.controller=new AbortController();
+  try{
+    const response=await fetch("/api/locations/suggest?q="+encodeURIComponent(query)+"&limit=5",{signal:field.controller.signal});
+    const parsed=await readApiResponse(response);
+    if(!parsed.ok||!parsed.data)return hideLocationSuggestions(field);
+    if(field.input.value.trim()!==query)return;
+    renderLocationSuggestions(field,parsed.data.suggestions||[]);
+  }catch(error){
+    if(error.name!=="AbortError")hideLocationSuggestions(field);
+  }
+}
+function handleLocationInput(field){
+  const value=field.input.value.trim();
+  if(field.selected&&value!==field.selected.label)clearLocationSelection(field);
+  const coordinates=parseCoordinates(value);
+  if(coordinates){
+    field.selected={label:value,...coordinates,type:"coordinates"};
+    field.coordinates.textContent="Coordinates: "+coordinateText(coordinates);
+    field.coordinates.classList.add("selected");
+    hideLocationSuggestions(field);
+    return;
+  }
+  clearTimeout(field.timer);
+  if(value.length<3){hideLocationSuggestions(field);return}
+  field.timer=setTimeout(()=>searchLocations(field,value),350);
+}
+function bindLocationField(field){
+  field.input.addEventListener("input",()=>handleLocationInput(field));
+  field.input.addEventListener("focus",()=>{if(field.items.length)field.suggestions.classList.add("open")});
+  field.input.addEventListener("blur",()=>setTimeout(()=>hideLocationSuggestions(field),120));
+  field.input.addEventListener("keydown",event=>{
+    if(!field.suggestions.classList.contains("open"))return;
+    if(event.key==="ArrowDown"){event.preventDefault();setActiveLocationOption(field,field.activeIndex+1)}
+    else if(event.key==="ArrowUp"){event.preventDefault();setActiveLocationOption(field,field.activeIndex-1)}
+    else if(event.key==="Enter"&&field.activeIndex>=0){event.preventDefault();setLocationSelection(field,field.items[field.activeIndex])}
+    else if(event.key==="Escape")hideLocationSuggestions(field);
+  });
+}
+function locationRequestValue(field){
+  const value=field.input.value.trim();
+  if(!value)return null;
+  if(field.selected&&value===field.selected.label)return coordinateText(field.selected);
+  const coordinates=parseCoordinates(value);
+  return coordinates?coordinateText(coordinates):value;
+}
+bindLocationField(locationFields.start);
+bindLocationField(locationFields.end);
 function retainedUploads(){return state.uploads.filter(item=>!item.discarded&&item.status==="uploaded")}function pendingUploads(){return state.uploads.some(item=>!item.discarded&&(item.status==="queued"||item.status==="uploading"))}
 function updateAnalyzeState(){els.analyze.disabled=pendingUploads()||retainedUploads().length===0}function clearResult(){state.current=null;window.tripReady=false;els.result.style.display="none";if(state.map){state.map.remove();state.map=null}hideMediaOverlay()}
 function cardFor(record){return document.querySelector('[data-client-id="'+record.clientId+'"]')}function setProgress(record,percent,text){const card=cardFor(record);if(!card)return;const bar=card.querySelector(".progress>div"),label=card.querySelector(".progress-text");if(bar)bar.style.width=Math.max(0,Math.min(100,percent))+"%";if(label)label.textContent=text}
@@ -190,8 +288,8 @@ function startUpload(record){
   xhr.send(form);
 }
 async function discardUpload(record){record.discarded=true;state.uploadQueue=state.uploadQueue.filter(item=>item!==record);if(record.xhr&&record.status==="uploading")record.xhr.abort();if(record.serverId){try{await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,{method:"DELETE"})}catch{}}if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);cardFor(record)?.remove();state.uploads=state.uploads.filter(item=>item!==record);updateAnalyzeState();clearResult();els.status.className="";els.status.textContent="Media discarded. It will not be used for the route."}
-els.dropZone.addEventListener("click",()=>els.fileInput.click());els.fileInput.addEventListener("change",()=>addFiles(els.fileInput.files));["dragenter","dragover"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.add("dragging")}));["dragleave","drop"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.remove("dragging")}));els.dropZone.addEventListener("drop",event=>addFiles(event.dataTransfer.files));els.returnStart.addEventListener("change",()=>{els.endPoint.disabled=els.returnStart.checked});
-async function analyze(){const uploads=retainedUploads();if(!uploads.length||pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Extracting metadata and tracing route in the container…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_location:els.startPoint.value.trim()||null,end_location:els.returnStart.checked?null:(els.endPoint.value.trim()||null),return_to_start:els.returnStart.checked};try{const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),parsed=await readApiResponse(response),data=parsed.data;if(!parsed.ok)throw new Error(parsed.detail||"Route analysis failed");if(!data)throw new Error("Route analysis returned an empty response");els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}else throw new Error("Route analysis returned no trips")}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
+els.dropZone.addEventListener("click",()=>els.fileInput.click());els.fileInput.addEventListener("change",()=>addFiles(els.fileInput.files));["dragenter","dragover"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.add("dragging")}));["dragleave","drop"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.remove("dragging")}));els.dropZone.addEventListener("drop",event=>addFiles(event.dataTransfer.files));els.returnStart.addEventListener("change",()=>{els.endPoint.disabled=els.returnStart.checked;if(els.returnStart.checked)hideLocationSuggestions(locationFields.end)});
+async function analyze(){const uploads=retainedUploads();if(!uploads.length||pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Extracting metadata and tracing route in the container…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_location:locationRequestValue(locationFields.start),end_location:els.returnStart.checked?null:locationRequestValue(locationFields.end),return_to_start:els.returnStart.checked};try{const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),parsed=await readApiResponse(response),data=parsed.data;if(!parsed.ok)throw new Error(parsed.detail||"Route analysis failed");if(!data)throw new Error("Route analysis returned an empty response");els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}else throw new Error("Route analysis returned no trips")}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
 const SATELLITE_TILES="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";function satelliteStyle(){return{version:8,sources:{satellite:{type:"raster",tiles:[SATELLITE_TILES],tileSize:256,attribution:"EOX Sentinel-2 cloudless"}},layers:[{id:"satellite",type:"raster",source:"satellite"}]}}
 function segmentDistance(a,b){const toRad=value=>value*Math.PI/180,lat1=toRad(a[1]),lat2=toRad(b[1]),dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))}function routeCoordinates(data){if(data.route?.geometry?.coordinates?.length)return data.route.geometry.coordinates;return data.observations.map(o=>[o.longitude,o.latitude])}function setupDistance(coords){state.cumulative=[0];for(let i=1;i<coords.length;i++)state.cumulative.push(state.cumulative[i-1]+segmentDistance(coords[i-1],coords[i]));state.totalDistance=state.cumulative.at(-1)||0}function positionAt(coords,progress){if(!coords.length)return null;if(coords.length===1)return{point:coords[0],index:0};const target=Math.max(0,Math.min(1,progress))*state.totalDistance;let index=0;while(index<state.cumulative.length-2&&state.cumulative[index+1]<target)index++;const a=coords[index],b=coords[index+1],start=state.cumulative[index],end=state.cumulative[index+1],length=Math.max(end-start,.000001),t=Math.max(0,Math.min(1,(target-start)/length));return{point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],index}}
 function setRouteProgress(progress){const data=state.current;if(!data||!state.marker||!state.map)return;const coords=routeCoordinates(data),result=positionAt(coords,progress);if(!result)return;state.marker.setLngLat(result.point);const nextIndex=Math.min(result.index+1,coords.length-1),a=coords[result.index],b=coords[nextIndex];if(state.vehicleGlyph&&a&&b&&state.map){const pa=state.map.project(a),pb=state.map.project(b);if(Math.abs(pb.x-pa.x)>.25)state.vehicleGlyph.style.setProperty("--direction",pb.x>=pa.x?1:-1)}const traveled=coords.slice(0,result.index+1).concat([result.point]);state.map.getSource("traveled")?.setData({type:"Feature",properties:{},geometry:{type:"LineString",coordinates:traveled}})}
