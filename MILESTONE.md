@@ -10,6 +10,7 @@
 | 5. API + preview | Complete | upload APIs and animated MapLibre preview |
 | 6. Rendering | Complete | deterministic Chromium frames and FFmpeg MP4 |
 | 7. Hardening | Complete for MVP | limits, retries, TTL cleanup, privacy/docs, synthetic E2E test |
+| 8. Hosted UX polish | Complete | media previews, route-bounded map, granular place labels, vehicle controls, inline JSON |
 
 ## Current engineering target
 

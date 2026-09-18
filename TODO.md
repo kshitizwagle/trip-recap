@@ -9,8 +9,15 @@
 - [x] Milestone 5: API and MapLibre preview
 - [x] Milestone 6: deterministic MP4 rendering
 - [x] Milestone 7: MVP hardening
+- [x] Milestone 8: hosted UX polish
 
 ## Hosted demo
+- [x] Preview uploaded photos and videos before analysis, including HEIC/HEIF where supported
+- [x] Lock the map against dragging and prevent zooming out beyond the fitted route extent
+- [x] Keep the selected vehicle upright and animate movement with easing and stop pauses
+- [x] Show place labels directly on map stops with selectable granularity
+- [x] Show media filenames in route-observation order
+- [x] View trip, route, and timeline JSON directly in the app with downloads optional
 - [x] Keep vehicle upright while moving instead of rotating with route bearing
 - [x] Add selectable scooter/car/motorcycle/bicycle/jeep animation vehicles
 - [x] Render general place-name labels directly on map stops
