@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import mimetypes
 import shutil
 from datetime import timedelta
@@ -43,6 +44,8 @@ FAVICON_PATH = WEB_DIR / "favicon.png"
 PLACE_GRANULARITIES = {"specific", "neighborhood", "city", "region"}
 IMAGE_PREVIEW_MAX_EDGE = 1920
 IMAGE_PREVIEW_QUALITY = 82
+UPLOAD_PROCESSING_CONCURRENCY = 2
+UPLOAD_PROCESSING_SEMAPHORE = asyncio.Semaphore(UPLOAD_PROCESSING_CONCURRENCY)
 
 api = FastAPI(
     title="Trip Recap",
@@ -81,6 +84,36 @@ def _metadata_dir(session_id: str) -> Path:
 
 def _metadata_path(session_id: str, upload_id: str) -> Path:
     return _metadata_dir(session_id) / f"{_uuid(upload_id, 'upload id')}.json"
+
+
+def _status_path(session_id: str, upload_id: str) -> Path:
+    return _metadata_dir(session_id) / f"{_uuid(upload_id, 'upload id')}.status.json"
+
+
+def _write_upload_status(
+    session_id: str,
+    upload_id: str,
+    payload: dict,
+) -> None:
+    _status_path(session_id, upload_id).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _read_upload_status(session_id: str, upload_id: str) -> dict:
+    path = _status_path(session_id, upload_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _public_upload_status(payload: dict) -> dict:
+    return {
+        key: value
+        for key, value in payload.items()
+        if key != "_path"
+    }
 
 
 def _load_uploaded_media(session_id: str, upload_id: str) -> MediaPoint:
@@ -438,9 +471,85 @@ def _trip_payload(
 
 
 
-@api.post("/api/upload-sessions/{session_id}/media")
+async def _process_uploaded_media(
+    session_id: str,
+    upload_id: str,
+    filename: str,
+    target: Path,
+    original_bytes: int,
+) -> None:
+    status_path = _status_path(session_id, upload_id)
+
+    async with UPLOAD_PROCESSING_SEMAPHORE:
+        try:
+            if not status_path.exists():
+                target.unlink(missing_ok=True)
+                return
+
+            extracted = await ExifToolExtractor().extract([target])
+            if not extracted:
+                raise RuntimeError("No metadata record returned")
+
+            media = extracted[0]
+            media.id = upload_id
+            media.filename = filename
+            media.path = target
+
+            if not status_path.exists():
+                target.unlink(missing_ok=True)
+                return
+
+            compressed = False
+            if media.media_type is MediaType.PHOTO:
+                media.path, compressed = await asyncio.to_thread(
+                    _compress_photo_after_metadata,
+                    media,
+                )
+
+            if not status_path.exists():
+                media.path.unlink(missing_ok=True)
+                return
+
+            _metadata_path(session_id, upload_id).write_text(
+                media.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+
+            ready = _upload_payload(
+                session_id,
+                media,
+                original_bytes=original_bytes,
+                compressed=compressed,
+            )
+            ready["state"] = "ready"
+            _write_upload_status(
+                session_id,
+                upload_id,
+                ready,
+            )
+        except Exception as exc:
+            target.unlink(missing_ok=True)
+            metadata_path = _metadata_path(session_id, upload_id)
+            metadata_path.unlink(missing_ok=True)
+
+            if status_path.exists():
+                _write_upload_status(
+                    session_id,
+                    upload_id,
+                    {
+                        "id": upload_id,
+                        "filename": filename,
+                        "state": "failed",
+                        "detail": str(exc),
+                        "original_bytes": original_bytes,
+                    },
+                )
+
+
+@api.post("/api/upload-sessions/{session_id}/media", status_code=202)
 async def upload_media(
     session_id: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> dict:
     store.cleanup_expired(settings.data_ttl_seconds)
@@ -452,36 +561,46 @@ async def upload_media(
     original_bytes = target.stat().st_size
     upload_id = str(uuid4())
 
-    try:
-        extracted = await ExifToolExtractor().extract([target])
-        if not extracted:
-            raise RuntimeError("No metadata record returned")
-
-        media = extracted[0]
-        media.id = upload_id
-        media.filename = filename
-        media.path = target
-
-        compressed = False
-        if media.media_type is MediaType.PHOTO:
-            media.path, compressed = await asyncio.to_thread(
-                _compress_photo_after_metadata,
-                media,
-            )
-
-        _metadata_path(session_id, upload_id).write_text(
-            media.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
-    except Exception as exc:
-        target.unlink(missing_ok=True)
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    return _upload_payload(
+    processing = {
+        "id": upload_id,
+        "filename": filename,
+        "state": "processing",
+        "original_bytes": original_bytes,
+        "stored_bytes": original_bytes,
+        "compressed": False,
+        "status_url": (
+            f"/api/upload-sessions/{session_id}/media/{upload_id}/status"
+        ),
+        "preview_url": (
+            f"/api/upload-sessions/{session_id}/media/{upload_id}/preview"
+        ),
+        "_path": str(target),
+    }
+    _write_upload_status(
         session_id,
-        media,
-        original_bytes=original_bytes,
-        compressed=compressed,
+        upload_id,
+        processing,
+    )
+
+    background_tasks.add_task(
+        _process_uploaded_media,
+        session_id,
+        upload_id,
+        filename,
+        target,
+        original_bytes,
+    )
+    return _public_upload_status(processing)
+
+
+@api.get("/api/upload-sessions/{session_id}/media/{upload_id}/status")
+async def uploaded_media_status(
+    session_id: str,
+    upload_id: str,
+) -> dict:
+    session_id = _uuid(session_id, "upload session id")
+    return _public_upload_status(
+        _read_upload_status(session_id, upload_id)
     )
 
 
@@ -489,6 +608,7 @@ async def upload_media(
 async def discard_uploaded_media(session_id: str, upload_id: str) -> dict:
     session_id = _uuid(session_id, "upload session id")
     metadata_path = _metadata_path(session_id, upload_id)
+    status_path = _status_path(session_id, upload_id)
 
     if metadata_path.exists():
         try:
@@ -498,6 +618,17 @@ async def discard_uploaded_media(session_id: str, upload_id: str) -> dict:
             media.path.unlink(missing_ok=True)
         finally:
             metadata_path.unlink(missing_ok=True)
+
+    if status_path.exists():
+        try:
+            status = json.loads(
+                status_path.read_text(encoding="utf-8")
+            )
+            raw_path = status.get("_path")
+            if raw_path:
+                Path(raw_path).unlink(missing_ok=True)
+        finally:
+            status_path.unlink(missing_ok=True)
 
     return {"status": "discarded", "id": upload_id}
 

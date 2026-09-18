@@ -74,6 +74,72 @@ function createCard(record){const card=document.createElement("div");card.classN
 function addFiles(fileList){Array.from(fileList).forEach(file=>{const record={clientId:crypto.randomUUID(),file,status:"queued",discarded:false,serverId:null,metadata:null,xhr:null,objectUrl:null,finished:false};state.uploads.push(record);state.uploadQueue.push(record);createCard(record)});els.fileInput.value="";updateAnalyzeState();pumpUploadQueue()}
 function finishUploadSlot(record){if(record.finished)return;record.finished=true;state.activeUploads=Math.max(0,state.activeUploads-1);pumpUploadQueue();updateAnalyzeState()}
 function pumpUploadQueue(){while(state.activeUploads<MAX_CONCURRENT_UPLOADS&&state.uploadQueue.length){const record=state.uploadQueue.shift();if(!record||record.discarded)continue;startUpload(record)}}
+async function pollUploadStatus(record){
+  while(!record.discarded&&record.status==="processing"){
+    await new Promise(resolve=>setTimeout(resolve,700));
+    if(record.discarded||!record.serverId)return;
+
+    let response;
+    try{
+      response=await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId+"/status",{cache:"no-store"});
+    }catch{
+      continue;
+    }
+
+    if(response.status===404){
+      if(!record.discarded){
+        record.status="failed";
+        setProgress(record,0,"Upload processing state was lost");
+        updateAnalyzeState();
+      }
+      return;
+    }
+
+    if(!response.ok)continue;
+    const payload=await response.json();
+
+    if(payload.state==="processing"){
+      setProgress(record,100,"Uploaded · extracting metadata…");
+      continue;
+    }
+
+    if(payload.state==="failed"){
+      record.status="failed";
+      setProgress(record,0,payload.detail||"Metadata extraction failed");
+      updateAnalyzeState();
+      return;
+    }
+
+    if(payload.state!=="ready")continue;
+
+    record.status="uploaded";
+    record.metadata=payload;
+    setProgress(record,100,payload.has_gps?"Uploaded · GPS ready":"Uploaded · no GPS");
+
+    const card=cardFor(record);
+    if(card){
+      const note=card.querySelector(".storage-note");
+      if(note){
+        note.textContent=payload.compressed
+          ? "Stored "+humanSize(payload.stored_bytes)+" after metadata extraction (from "+humanSize(payload.original_bytes)+")"
+          : "Stored "+humanSize(payload.stored_bytes);
+      }
+
+      if(/\.(heic|heif)$/i.test(record.file.name)){
+        const thumb=card.querySelector(".media-thumb");
+        thumb.innerHTML="";
+        const img=document.createElement("img");
+        img.src=payload.preview_url;
+        img.alt=record.file.name;
+        thumb.appendChild(img);
+      }
+    }
+
+    refreshPointSelectors();
+    updateAnalyzeState();
+    return;
+  }
+}
 function startUpload(record){
   state.activeUploads++;
   record.status="uploading";
@@ -98,47 +164,32 @@ function startUpload(record){
   xhr.upload.onload=()=>{
     if(!record.discarded){
       record.status="processing";
-      setProgress(record,100,"Extracting metadata + optimizing image…");
+      setProgress(record,100,"Upload complete · waiting for server…");
     }
   };
 
   xhr.onload=()=>{
-    try{
-      if(record.discarded)return;
-      const payload=xhr.response||{};
-      if(xhr.status<200||xhr.status>=300){
-        record.status="failed";
-        setProgress(record,0,payload.detail||"Upload failed");
-        return;
-      }
-
-      record.status="uploaded";
-      record.serverId=payload.id;
-      record.metadata=payload;
-      setProgress(record,100,payload.has_gps?"Uploaded · GPS ready":"Uploaded · no GPS");
-
-      const card=cardFor(record);
-      if(card){
-        const note=card.querySelector(".storage-note");
-        if(note){
-          note.textContent=payload.compressed
-            ? "Stored "+humanSize(payload.stored_bytes)+" after metadata extraction (from "+humanSize(payload.original_bytes)+")"
-            : "Stored "+humanSize(payload.stored_bytes);
-        }
-
-        if(/\.(heic|heif)$/i.test(record.file.name)){
-          const thumb=card.querySelector(".media-thumb");
-          thumb.innerHTML="";
-          const img=document.createElement("img");
-          img.src=payload.preview_url;
-          img.alt=record.file.name;
-          thumb.appendChild(img);
-        }
-      }
-      refreshPointSelectors();
-    } finally {
+    if(record.discarded){
       finishUploadSlot(record);
+      return;
     }
+
+    const payload=xhr.response||{};
+    if(xhr.status<200||xhr.status>=300){
+      record.status="failed";
+      const detail=payload.detail||("Upload failed · HTTP "+xhr.status+(xhr.statusText?" "+xhr.statusText:""));
+      setProgress(record,0,detail);
+      finishUploadSlot(record);
+      return;
+    }
+
+    record.serverId=payload.id;
+    record.status="processing";
+    record.metadata=payload;
+    setProgress(record,100,"Uploaded · extracting metadata…");
+
+    finishUploadSlot(record);
+    pollUploadStatus(record);
   };
 
   xhr.onerror=()=>{

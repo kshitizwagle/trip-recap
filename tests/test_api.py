@@ -18,6 +18,7 @@ def test_root_contains_fastapi_trip_ui() -> None:
     assert "Determine route from retained media" in response.text
     assert "/api/trips/analyze-session" in response.text
     assert "MAX_CONCURRENT_UPLOADS=4" in response.text
+    assert "pollUploadStatus" in response.text
     assert "playback-speed" in response.text
     assert "slow-points" in response.text
     assert "/favicon.png" in response.text
