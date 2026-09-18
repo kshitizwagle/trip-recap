@@ -43,6 +43,8 @@ VEHICLE_ICONS = {
     "Jeep": "🚙",
 }
 
+MAP_STYLE_OPTIONS = ("Street", "Satellite", "Hybrid")
+
 MAP_TEMPLATE = r"""<!doctype html>
 <html>
 <head>
@@ -140,13 +142,38 @@ MAP_TEMPLATE = r"""<!doctype html>
     const route = __ROUTE_JSON__;
     const observations = __OBSERVATIONS_JSON__;
     const vehicleIcon = __VEHICLE_JSON__;
+    const mapStyle = __MAP_STYLE_JSON__;
     const coords = route.geometry.coordinates || [];
+
+    const satelliteStyle = {
+      version: 8,
+      sources: {
+        satellite: {
+          type: "raster",
+          tiles: [
+            "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
+          ],
+          tileSize: 256,
+          attribution: "EOX Sentinel-2 cloudless"
+        }
+      },
+      layers: [
+        {
+          id: "satellite",
+          type: "raster",
+          source: "satellite"
+        }
+      ]
+    };
 
     const initialCenter = coords.length ? coords[0] : [85.324, 27.676];
 
     const map = new maplibregl.Map({
       container: "map",
-      style: "https://tiles.openfreemap.org/styles/liberty",
+      style:
+        mapStyle === "Satellite"
+          ? satelliteStyle
+          : "https://tiles.openfreemap.org/styles/liberty",
       center: initialCenter,
       zoom: coords.length ? 8 : 6,
       attributionControl: true,
@@ -385,6 +412,38 @@ MAP_TEMPLATE = r"""<!doctype html>
     }
 
     map.on("load", () => {
+      if (mapStyle === "Hybrid") {
+        map.addSource("satellite-underlay", {
+          type: "raster",
+          tiles: [
+            "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
+          ],
+          tileSize: 256,
+          attribution: "EOX Sentinel-2 cloudless"
+        });
+
+        const firstOverlayLayer = map
+          .getStyle()
+          .layers
+          .find(
+            layer =>
+              layer.type !== "fill" &&
+              layer.type !== "background"
+          );
+
+        map.addLayer(
+          {
+            id: "satellite-underlay",
+            type: "raster",
+            source: "satellite-underlay",
+            paint: {
+              "raster-opacity": 1
+            }
+          },
+          firstOverlayLayer ? firstOverlayLayer.id : undefined
+        );
+      }
+
       map.addSource("route", {
         type: "geojson",
         data: route
@@ -700,6 +759,7 @@ def _map_html(
     route,
     place_names: dict[str, str],
     vehicle: str,
+    map_style: str,
 ) -> str:
     observations = []
 
@@ -757,6 +817,10 @@ def _map_html(
         .replace(
             "__VEHICLE_JSON__",
             json.dumps(vehicle),
+        )
+        .replace(
+            "__MAP_STYLE_JSON__",
+            json.dumps(map_style),
         )
     )
 
@@ -821,6 +885,7 @@ def _render_result(
     result: dict,
     index: int,
     vehicle: str,
+    map_style: str,
 ) -> None:
     trip = result["trip"]
     route = result["route"]
@@ -891,6 +956,7 @@ def _render_result(
                 route,
                 place_names,
                 vehicle,
+                map_style,
             ),
             height=700,
             scrolling=False,
@@ -1008,7 +1074,7 @@ def render_app() -> None:
         )
         _render_media_previews(uploaded_files)
 
-    control_1, control_2, control_3 = st.columns(3)
+    control_1, control_2, control_3, control_4 = st.columns(4)
 
     with control_1:
         keep_as_one_trip = st.toggle(
@@ -1037,6 +1103,18 @@ def render_app() -> None:
                 "Specific favors roads or named places. "
                 "Neighborhood favors local areas. "
                 "City / Town and Region are broader."
+            ),
+        )
+
+    with control_4:
+        map_style = st.selectbox(
+            "Map style",
+            options=MAP_STYLE_OPTIONS,
+            index=0,
+            help=(
+                "Street uses OpenFreeMap. Satellite uses "
+                "EOX Sentinel-2 imagery. Hybrid keeps roads "
+                "and labels over satellite imagery."
             ),
         )
 
@@ -1084,6 +1162,7 @@ def render_app() -> None:
                 result,
                 result_index,
                 vehicle,
+                map_style,
             )
 
     st.caption(
