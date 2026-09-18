@@ -211,6 +211,7 @@ export default function MapPreview({
     const setup = async () => {
       if (!containerRef.current) return;
       const maplibregl = await import('maplibre-gl');
+      maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
       if (cancelled || !containerRef.current) return;
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
