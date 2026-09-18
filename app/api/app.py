@@ -22,6 +22,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
@@ -40,9 +41,13 @@ from app.trip.builder import TripBuilder, haversine_meters
 
 pillow_heif.register_heif_opener()
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 WEB_INDEX = WEB_DIR / "index.html"
 FAVICON_PATH = WEB_DIR / "favicon.png"
+FRONTEND_OUT = REPO_ROOT / "frontend" / "out"
+FRONTEND_INDEX = FRONTEND_OUT / "index.html"
+FRONTEND_PREVIEW_INDEX = FRONTEND_OUT / "preview" / "index.html"
 PLACE_GRANULARITIES = {"specific", "neighborhood", "city", "region"}
 IMAGE_PREVIEW_MAX_EDGE = 1920
 IMAGE_PREVIEW_QUALITY = 82
@@ -486,14 +491,34 @@ def _web_html() -> str:
     return WEB_INDEX.read_text(encoding="utf-8")
 
 
+def _frontend_response(path: Path) -> Response:
+    if path.exists():
+        return FileResponse(
+            path,
+            media_type="text/html",
+        )
+    return HTMLResponse(_web_html())
+
+
+if (FRONTEND_OUT / "_next").exists():
+    api.mount(
+        "/_next",
+        StaticFiles(
+            directory=FRONTEND_OUT / "_next",
+        ),
+        name="next-static",
+    )
+
+
 @api.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def root() -> str:
-    return _web_html()
+async def root() -> Response:
+    return _frontend_response(FRONTEND_INDEX)
 
 
 @api.get("/preview", response_class=HTMLResponse, include_in_schema=False)
-async def preview() -> str:
-    return _web_html()
+@api.get("/preview/", response_class=HTMLResponse, include_in_schema=False)
+async def preview() -> Response:
+    return _frontend_response(FRONTEND_PREVIEW_INDEX)
 
 
 @api.get("/favicon.png", include_in_schema=False)
