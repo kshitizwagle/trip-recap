@@ -10,6 +10,14 @@
 - [x] Milestone 6: deterministic MP4 rendering
 - [x] Milestone 7: MVP hardening
 
+## Hosted demo
+- [x] Run upload, metadata extraction, trip analysis, routing, and MapLibre preview directly from the Streamlit root app
+- [x] Remove Streamlit Community Cloud dependence on custom `/api/*` routes
+- [ ] Validate hosted analysis with original iPhone HEIC/MOV files
+- [ ] Validate hosted analysis with Android JPEG/MP4 files
+- [ ] Verify ExifTool and OSRM behavior under Streamlit Community Cloud limits
+- [ ] Reconnect MP4 export in the Streamlit UI after browser capture is validated on the host
+
 ## Follow-up validation
 - [ ] Test with a sanitized real-device HEIC/MOV/JPEG/MP4 fixture set
 - [ ] Verify ExifTool field variations across iPhone and Android samples

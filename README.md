@@ -38,25 +38,24 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run:
+Run the hosted-style Streamlit UI:
 
 ```bash
 streamlit run main.py
 ```
 
-The Streamlit landing page links to the trip builder. FastAPI is mounted under `/api` through Streamlit's ASGI app support.
+The root page handles upload, metadata extraction, trip reconstruction, OSRM routing, and MapLibre preview directly in the Streamlit process.
 
-Useful paths:
+The FastAPI application remains available for normal ASGI hosting:
 
-- `/` Streamlit landing page
-- `/api/preview` upload and animated MapLibre preview
-- `/api/docs` FastAPI OpenAPI UI
-- `/api/health` health check
+```bash
+uvicorn app.api.app:api --host 0.0.0.0 --port 8000
+```
 
 ## Tests
 
 ```bash
-pytest -q
+PYTHONPATH=. pytest -q
 ```
 
 Tests use synthetic metadata and mocked routing so they do not depend on live OSRM or private media fixtures.
@@ -77,9 +76,11 @@ Environment variables:
 
 ## Streamlit Community Cloud
 
-The repository includes `requirements.txt` and `packages.txt`. Configure `main.py` as the Streamlit entry point. The hosted app uses Streamlit for the process/landing page and mounts FastAPI at `/api`.
+The repository includes `requirements.txt` and `packages.txt`. Configure `main.py` as the Streamlit entry point.
 
-Rendering is resource intensive. Community Cloud is useful for the MVP, but production rendering should eventually move to a dedicated worker/runtime.
+Community Cloud runs the trip builder directly on `/`. The deployed demo does not rely on custom FastAPI or Starlette routes.
+
+Rendering is resource intensive. Community Cloud is useful for analysis and preview, but production MP4 rendering should eventually move to a dedicated worker/runtime.
 
 ## Privacy
 
