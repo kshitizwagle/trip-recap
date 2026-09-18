@@ -10,7 +10,7 @@ The hosted app is now FastAPI end to end:
 
 ```text
 browser UI served by FastAPI
--> immediate concurrent per-file upload with discard support
+-> concurrent retryable 2 MiB chunk uploads with discard support
 -> ExifTool metadata normalization in the container when route generation starts
 -> trip clustering and segmentation
 -> OSRM road routing
@@ -22,7 +22,7 @@ browser UI served by FastAPI
 
 No Streamlit runtime is used.
 
-The browser only uploads raw media and shows transfer progress. Files larger than 25 MB are rejected before upload and by the backend. ExifTool metadata extraction, GPS parsing, image optimization, clustering, and routing run in the container only when the user clicks Determine route. Start and end points accept either a place name or `latitude, longitude`. If omitted, the first and last media-derived GPS points are used. Original uploads stay intact until workspace cleanup so a route can be recomputed with different endpoints.
+The browser only uploads raw media and shows transfer progress. Each file is sent as sequential 2 MiB chunks with per-chunk retries, while up to four files can upload concurrently. Files larger than 25 MB are rejected before upload and by the backend. ExifTool metadata extraction, GPS parsing, image optimization, clustering, and routing run in the container only when the user clicks Determine route. Start and end points accept either a place name or `latitude, longitude`. If omitted, the first and last media-derived GPS points are used. Raw upload chunks and assembled source files live only under `/tmp/trip-recap/workspaces`. After successful route processing the raw workspace is deleted immediately. Trip media and render artifacts remain under `/tmp/trip-recap` only until TTL cleanup.
 
 Route tracing and presentation controls are separated. Media uploads begin immediately with up to four concurrent uploads. Metadata is extracted from the original file first, then photos are optionally reduced to a smaller WebP display copy when that saves space. Discarded uploads disappear from the UI and are excluded from routing. Start/end points can be selected from geotagged media, including a loop that returns to the selected start. Map style and place-name granularity can change without rerunning OSRM. Playback has speed controls, optional slowdown at image-derived GPS points, and the vehicle flips to face its current route direction.
 
@@ -109,7 +109,6 @@ FastAPI Cloud's documented dependency flow is Python-package based. Verify those
 
 Environment variables:
 
-- `TRIP_RECAP_DATA_DIR` default `/tmp/trip-recap`
 - `TRIP_RECAP_MAX_FILES` default `100`
 - `TRIP_RECAP_MAX_FILE_BYTES` hard maximum `25 MiB`
 - `TRIP_RECAP_DATA_TTL_SECONDS` default `3600`
