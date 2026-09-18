@@ -19,6 +19,9 @@ def test_root_contains_fastapi_trip_ui() -> None:
     assert "/api/trips/analyze-session" in response.text
     assert "MAX_CONCURRENT_UPLOADS=4" in response.text
     assert "MAX_FILE_BYTES=25*1024*1024" in response.text
+    assert "UPLOAD_CHUNK_BYTES=2*1024*1024" in response.text
+    assert "/media/init" in response.text
+    assert "/chunks/" in response.text
     assert "Max 25 MB per file" in response.text
     assert "start_location" in response.text
     assert "/api/locations/suggest" in response.text
@@ -98,3 +101,69 @@ def test_analyze_session_ignores_missing_uploads() -> None:
     assert response.status_code == 400
     assert "No available retained uploads" in response.json()["detail"]
     assert response.json()["detail"] != "Upload not found"
+
+
+def test_chunked_upload_round_trip() -> None:
+    session_id = "7cb3510d-67d1-47c1-95c6-bfbac276fa2e"
+    payload = b"trip-recap"
+
+    init = client.post(
+        f"/api/upload-sessions/{session_id}/media/init",
+        json={
+            "filename": "photo.jpg",
+            "size_bytes": len(payload),
+            "chunk_size_bytes": 256 * 1024,
+        },
+    )
+    assert init.status_code == 201
+    upload_id = init.json()["id"]
+    assert init.json()["total_chunks"] == 1
+
+    chunk = client.put(
+        (
+            f"/api/upload-sessions/{session_id}/media/"
+            f"{upload_id}/chunks/0"
+        ),
+        content=payload,
+        headers={"content-type": "application/octet-stream"},
+    )
+    assert chunk.status_code == 204
+
+    complete = client.post(
+        (
+            f"/api/upload-sessions/{session_id}/media/"
+            f"{upload_id}/complete"
+        )
+    )
+    assert complete.status_code == 200
+    assert complete.json()["state"] == "uploaded"
+    assert complete.json()["stored_bytes"] == len(payload)
+
+    status = client.get(
+        (
+            f"/api/upload-sessions/{session_id}/media/"
+            f"{upload_id}/status"
+        )
+    )
+    assert status.status_code == 200
+    assert status.json()["state"] == "uploaded"
+
+    discarded = client.delete(
+        f"/api/upload-sessions/{session_id}/media/{upload_id}"
+    )
+    assert discarded.status_code == 200
+
+
+def test_chunked_upload_rejects_files_over_25_mb() -> None:
+    session_id = "38c9fb46-dd93-4f04-bcdf-81896551118d"
+    response = client.post(
+        f"/api/upload-sessions/{session_id}/media/init",
+        json={
+            "filename": "too-large.mov",
+            "size_bytes": 25 * 1024 * 1024 + 1,
+            "chunk_size_bytes": 2 * 1024 * 1024,
+        },
+    )
+
+    assert response.status_code == 413
+    assert "File too large" in response.json()["detail"]
