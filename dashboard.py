@@ -140,14 +140,18 @@ MAP_TEMPLATE = r"""<!doctype html>
       center: initialCenter,
       zoom: coords.length ? 8 : 6,
       attributionControl: true,
-      dragPan: false,
+      dragPan: true,
       dragRotate: false,
-      keyboard: false,
-      boxZoom: false,
+      keyboard: true,
+      boxZoom: true,
+      scrollZoom: true,
       touchPitch: false,
       pitchWithRotate: false
     });
 
+    map.dragPan.enable();
+    map.scrollZoom.enable();
+    map.touchZoomRotate.enable();
     map.touchZoomRotate.disableRotation();
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }),
@@ -347,8 +351,8 @@ MAP_TEMPLATE = r"""<!doctype html>
       const south = bounds.getSouth();
       const north = bounds.getNorth();
 
-      const lonPad = Math.max((east - west) * 0.08, 0.002);
-      const latPad = Math.max((north - south) * 0.08, 0.002);
+      const lonPad = Math.max((east - west) * 0.35, 0.01);
+      const latPad = Math.max((north - south) * 0.35, 0.01);
 
       return [
         [west - lonPad, south - latPad],
@@ -358,8 +362,14 @@ MAP_TEMPLATE = r"""<!doctype html>
 
     function fitRoute() {
       if (!routeBounds) return;
+      map.resize();
       map.fitBounds(routeBounds, {
-        padding: 70,
+        padding: {
+          top: 90,
+          right: 90,
+          bottom: 110,
+          left: 90
+        },
         duration: 350
       });
     }
@@ -435,15 +445,24 @@ MAP_TEMPLATE = r"""<!doctype html>
           new maplibregl.LngLatBounds(boundsCoords[0], boundsCoords[0])
         );
 
-        map.fitBounds(routeBounds, {
-          padding: 70,
-          duration: 0
-        });
+        map.setMaxBounds(paddedBounds(routeBounds));
 
         requestAnimationFrame(() => {
-          fittedZoom = map.getZoom();
-          map.setMinZoom(fittedZoom);
-          map.setMaxBounds(paddedBounds(routeBounds));
+          requestAnimationFrame(() => {
+            map.resize();
+            map.fitBounds(routeBounds, {
+              padding: {
+                top: 90,
+                right: 90,
+                bottom: 110,
+                left: 90
+              },
+              duration: 0
+            });
+
+            fittedZoom = map.getZoom();
+            map.setMinZoom(Math.max(2, fittedZoom - 1.5));
+          });
         });
       } else if (boundsCoords.length === 1) {
         routeBounds = new maplibregl.LngLatBounds(
@@ -452,12 +471,12 @@ MAP_TEMPLATE = r"""<!doctype html>
         );
         map.setCenter(boundsCoords[0]);
         map.setZoom(14);
-        map.setMinZoom(14);
+        map.setMinZoom(11);
 
         const [lon, lat] = boundsCoords[0];
         map.setMaxBounds([
-          [lon - 0.02, lat - 0.02],
-          [lon + 0.02, lat + 0.02]
+          [lon - 0.08, lat - 0.08],
+          [lon + 0.08, lat + 0.08]
         ]);
       }
 
