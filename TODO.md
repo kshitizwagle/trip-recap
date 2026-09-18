@@ -12,6 +12,7 @@
 - [x] Milestone 8: hosted UX polish
 
 ## Hosted demo
+- [x] Force reverse-geocoded stop names to English and display only the first location segment before a comma
 - [x] Preview uploaded photos and videos before analysis, including HEIC/HEIF where supported
 - [x] Lock the map against dragging and prevent zooming out beyond the fitted route extent
 - [x] Keep the selected vehicle upright and animate movement with easing and stop pauses

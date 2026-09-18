@@ -25,34 +25,28 @@ SAMPLE = {
 }
 
 
-def test_place_name_granularity() -> None:
+def test_place_name_granularity_returns_single_label() -> None:
+    assert format_place_name(SAMPLE, "specific") == "Boudha Stupa"
+    assert format_place_name(SAMPLE, "neighborhood") == "Boudha"
+    assert format_place_name(SAMPLE, "city") == "Kathmandu"
+    assert format_place_name(SAMPLE, "region") == "Kathmandu"
+
+
+def test_place_name_is_trimmed_before_comma() -> None:
+    payload = {
+        "name": "Patan Durbar Square, Lalitpur",
+        "address": {
+            "city": "Lalitpur Metropolitan City, Bagmati Province",
+        },
+    }
+
     assert (
-        format_place_name(
-            SAMPLE,
-            "specific",
-        )
-        == "Boudha Stupa, Boudha"
+        format_place_name(payload, "specific")
+        == "Patan Durbar Square"
     )
     assert (
-        format_place_name(
-            SAMPLE,
-            "neighborhood",
-        )
-        == "Boudha, Kathmandu"
-    )
-    assert (
-        format_place_name(
-            SAMPLE,
-            "city",
-        )
-        == "Kathmandu, Bagmati Province"
-    )
-    assert (
-        format_place_name(
-            SAMPLE,
-            "region",
-        )
-        == "Kathmandu, Bagmati Province"
+        format_place_name(payload, "city")
+        == "Lalitpur Metropolitan City"
     )
 
 
@@ -67,20 +61,24 @@ def test_general_place_name_keeps_city_behavior() -> None:
                 }
             }
         )
-        == "Charikot, Dolakha"
+        == "Charikot"
     )
 
 
-def test_reverse_geocoder_caches_raw_payload(
+def test_reverse_geocoder_requests_english_and_caches_raw_payload(
     tmp_path: Path,
 ) -> None:
     calls = 0
+    requested_language = None
 
     def handler(
         request: httpx.Request,
     ) -> httpx.Response:
-        nonlocal calls
+        nonlocal calls, requested_language
         calls += 1
+        requested_language = request.url.params.get(
+            "accept-language"
+        )
         return httpx.Response(
             200,
             json=SAMPLE,
@@ -107,6 +105,7 @@ def test_reverse_geocoder_caches_raw_payload(
             granularity="specific",
         )
 
-    assert neighborhood == "Boudha, Kathmandu"
-    assert specific == "Boudha Stupa, Boudha"
+    assert neighborhood == "Boudha"
+    assert specific == "Boudha Stupa"
+    assert requested_language == "en"
     assert calls == 1

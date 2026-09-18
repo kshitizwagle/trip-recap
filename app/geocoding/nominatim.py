@@ -26,15 +26,10 @@ def _first(
     return None
 
 
-def _join_distinct(
-    first: str | None,
-    second: str | None,
-) -> str | None:
-    if first and second:
-        if first.casefold() == second.casefold():
-            return first
-        return f"{first}, {second}"
-    return first or second
+def _before_comma(value: str | None) -> str | None:
+    if not value:
+        return None
+    return value.split(",", 1)[0].strip() or None
 
 
 def format_place_name(
@@ -101,65 +96,27 @@ def format_place_name(
                 ),
             )
         )
-        context = neighborhood or city or district
-        label = _join_distinct(
-            specific,
-            context,
-        )
-        if label:
-            return label
+        label = specific or neighborhood or city or district or region
+        return _before_comma(label)
 
     if granularity == "neighborhood":
-        local = neighborhood or city
-        context = (
-            city
-            if local and city and local.casefold() != city.casefold()
-            else district or region
+        return _before_comma(
+            neighborhood or city or district or region
         )
-        label = _join_distinct(
-            local,
-            context,
-        )
-        if label:
-            return label
 
     if granularity == "city":
-        context = district
-        if (
-            city
-            and district
-            and city.casefold() == district.casefold()
-        ):
-            context = region
-        label = _join_distinct(
-            city or neighborhood,
-            context or region,
+        return _before_comma(
+            city or neighborhood or district or region
         )
-        if label:
-            return label
 
     if granularity == "region":
-        label = _join_distinct(
-            district,
-            region,
+        return _before_comma(
+            district or region or city or neighborhood
         )
-        if label:
-            return label
 
     display_name = payload.get("display_name")
     if display_name:
-        parts = [
-            part.strip()
-            for part in str(display_name).split(",")
-            if part.strip()
-        ]
-        if parts:
-            count = 2 if granularity in {
-                "specific",
-                "neighborhood",
-                "region",
-            } else 1
-            return ", ".join(parts[:count])
+        return _before_comma(str(display_name))
 
     return None
 
@@ -217,7 +174,7 @@ class NominatimReverseGeocoder:
     ) -> dict[str, Any]:
         cache_path = (
             self.cache_dir
-            / f"raw_{self._cache_key(latitude, longitude)}.json"
+            / f"raw_en_{self._cache_key(latitude, longitude)}.json"
         )
 
         if cache_path.exists():
@@ -254,6 +211,7 @@ class NominatimReverseGeocoder:
                     "format": "jsonv2",
                     "addressdetails": 1,
                     "zoom": 18,
+                    "accept-language": "en",
                 },
                 headers={
                     "User-Agent": self.user_agent,
