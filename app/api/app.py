@@ -4,10 +4,10 @@ import asyncio
 import json
 import mimetypes
 import shutil
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pillow_heif
 from fastapi import (
@@ -33,8 +33,9 @@ from app.routing.builder import build_route, project_observation_progress
 from app.routing.cache import RouteCache
 from app.routing.osrm import OSRMRouter
 from app.storage import TripStore
+from app.models.trip import Observation
 from app.timeline.builder import TimelineBuilder
-from app.trip.builder import TripBuilder
+from app.trip.builder import TripBuilder, haversine_meters
 
 pillow_heif.register_heif_opener()
 
@@ -44,8 +45,6 @@ FAVICON_PATH = WEB_DIR / "favicon.png"
 PLACE_GRANULARITIES = {"specific", "neighborhood", "city", "region"}
 IMAGE_PREVIEW_MAX_EDGE = 1920
 IMAGE_PREVIEW_QUALITY = 82
-UPLOAD_PROCESSING_CONCURRENCY = 2
-UPLOAD_PROCESSING_SEMAPHORE = asyncio.Semaphore(UPLOAD_PROCESSING_CONCURRENCY)
 
 api = FastAPI(
     title="Trip Recap",
@@ -60,8 +59,8 @@ class AnalyzeSessionRequest(BaseModel):
     session_id: str
     upload_ids: list[str]
     keep_as_one_trip: bool = True
-    start_media_id: str | None = None
-    end_media_id: str | None = None
+    start_location: str | None = None
+    end_location: str | None = None
     return_to_start: bool = False
 
 
@@ -82,12 +81,8 @@ def _metadata_dir(session_id: str) -> Path:
     return path
 
 
-def _metadata_path(session_id: str, upload_id: str) -> Path:
-    return _metadata_dir(session_id) / f"{_uuid(upload_id, 'upload id')}.json"
-
-
 def _status_path(session_id: str, upload_id: str) -> Path:
-    return _metadata_dir(session_id) / f"{_uuid(upload_id, 'upload id')}.status.json"
+    return _metadata_dir(session_id) / f"{_uuid(upload_id, 'upload id')}.upload.json"
 
 
 def _write_upload_status(
@@ -109,49 +104,22 @@ def _read_upload_status(session_id: str, upload_id: str) -> dict:
 
 
 def _public_upload_status(payload: dict) -> dict:
-    return {
-        key: value
-        for key, value in payload.items()
-        if key != "_path"
-    }
+    return {key: value for key, value in payload.items() if key != "_path"}
 
 
-def _load_uploaded_media(session_id: str, upload_id: str) -> MediaPoint:
-    path = _metadata_path(session_id, upload_id)
+def _load_upload_record(session_id: str, upload_id: str) -> dict:
+    payload = _read_upload_status(session_id, upload_id)
+    raw_path = payload.get("_path")
+    if payload.get("state") != "uploaded" or not raw_path:
+        raise HTTPException(status_code=409, detail="Upload is not ready")
+    path = Path(raw_path)
     if not path.exists():
-        raise HTTPException(status_code=404, detail="Uploaded media not found")
-    media = MediaPoint.model_validate_json(path.read_text(encoding="utf-8"))
-    if not media.path.exists():
         raise HTTPException(
             status_code=404,
             detail="Uploaded media file is no longer available",
         )
-    return media
-
-
-def _upload_payload(
-    session_id: str,
-    media: MediaPoint,
-    *,
-    original_bytes: int,
-    compressed: bool,
-) -> dict:
-    return {
-        "id": media.id,
-        "filename": media.filename,
-        "media_type": media.media_type.value,
-        "captured_at": media.captured_at.isoformat() if media.captured_at else None,
-        "timestamp_source": media.timestamp_source,
-        "latitude": media.latitude,
-        "longitude": media.longitude,
-        "has_gps": media.has_gps,
-        "gps_quality": media.gps_quality.value,
-        "warnings": media.metadata_warnings,
-        "original_bytes": original_bytes,
-        "stored_bytes": media.path.stat().st_size,
-        "compressed": compressed,
-        "preview_url": f"/api/upload-sessions/{session_id}/media/{media.id}/preview",
-    }
+    payload["_path"] = str(path)
+    return payload
 
 
 def _compress_photo_after_metadata(media: MediaPoint) -> tuple[Path, bool]:
@@ -190,82 +158,149 @@ def _compress_photo_after_metadata(media: MediaPoint) -> tuple[Path, bool]:
             target.unlink(missing_ok=True)
             return source, False
 
-        source.unlink(missing_ok=True)
         return target, True
     except Exception:
         target.unlink(missing_ok=True)
         return source, False
 
 
-def _observation_index_for_media(trip, media_id: str | None) -> int | None:
-    if not media_id:
+def _parse_coordinates(value: str) -> tuple[float, float] | None:
+    parts = [part.strip() for part in value.split(",")]
+    if len(parts) != 2:
         return None
-    for index, observation in enumerate(trip.observations):
-        if media_id in observation.media_ids:
-            return index
-    return None
+    try:
+        latitude = float(parts[0])
+        longitude = float(parts[1])
+    except ValueError:
+        return None
+    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+        raise HTTPException(
+            status_code=400,
+            detail="Coordinates must be valid latitude, longitude values",
+        )
+    return latitude, longitude
+
+
+async def _resolve_location(value: str | None) -> tuple[float, float] | None:
+    text = (value or "").strip()
+    if not text:
+        return None
+
+    coordinates = _parse_coordinates(text)
+    if coordinates is not None:
+        return coordinates
+
+    geocoder = NominatimReverseGeocoder(
+        store.root / "cache" / "places"
+    )
+    result = await asyncio.to_thread(
+        geocoder.forward,
+        text,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not find location: {text}",
+        )
+    return result["latitude"], result["longitude"]
+
+
+def _endpoint_observation(
+    kind: str,
+    coordinate: tuple[float, float],
+    when: datetime,
+) -> Observation:
+    latitude, longitude = coordinate
+    return Observation(
+        id=str(
+            uuid5(
+                NAMESPACE_URL,
+                f"{kind}:{latitude:.7f}:{longitude:.7f}:{when.isoformat()}",
+            )
+        ),
+        arrival=when,
+        departure=when,
+        latitude=latitude,
+        longitude=longitude,
+        media_ids=[],
+    )
+
+
+def _same_point(
+    observation: Observation,
+    coordinate: tuple[float, float],
+) -> bool:
+    return haversine_meters(
+        observation.latitude,
+        observation.longitude,
+        coordinate[0],
+        coordinate[1],
+    ) < 1.0
 
 
 def _apply_route_endpoints(
     trip,
-    start_media_id: str | None,
-    end_media_id: str | None,
+    start_coordinate: tuple[float, float] | None,
+    end_coordinate: tuple[float, float] | None,
     return_to_start: bool,
 ) -> None:
     observations = list(trip.observations)
-    if not observations:
-        return
+    fallback_time = trip.started_at or trip.ended_at or datetime.now()
 
-    start_index = _observation_index_for_media(trip, start_media_id)
-    if start_media_id and start_index is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Selected start point does not have a usable GPS observation",
-        )
-    if start_index is None:
-        start_index = 0
-
-    same_selected_point = bool(
-        start_media_id
-        and end_media_id
-        and start_media_id == end_media_id
-    )
-    if return_to_start or same_selected_point:
-        selected = observations[start_index:]
-        if len(selected) > 1:
-            first = selected[0]
-            last = selected[-1]
-            closing = first.model_copy(
-                update={
-                    "id": f"{first.id}-return",
-                    "arrival": last.departure,
-                    "departure": last.departure,
-                    "media_ids": [],
-                }
+    if start_coordinate is not None:
+        start_time = observations[0].arrival if observations else fallback_time
+        if not observations or not _same_point(observations[0], start_coordinate):
+            observations.insert(
+                0,
+                _endpoint_observation(
+                    "start",
+                    start_coordinate,
+                    start_time,
+                ),
             )
-            selected.append(closing)
-        trip.observations = selected
-        return
 
-    end_index = _observation_index_for_media(trip, end_media_id)
-    if end_media_id and end_index is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Selected end point does not have a usable GPS observation",
+    if return_to_start:
+        if observations:
+            loop_coordinate = (
+                start_coordinate
+                if start_coordinate is not None
+                else (
+                    observations[0].latitude,
+                    observations[0].longitude,
+                )
+            )
+            if len(observations) > 1 or not _same_point(
+                observations[-1],
+                loop_coordinate,
+            ):
+                observations.append(
+                    _endpoint_observation(
+                        "return",
+                        loop_coordinate,
+                        observations[-1].departure,
+                    )
+                )
+    elif end_coordinate is not None:
+        end_time = observations[-1].departure if observations else fallback_time
+        if not observations or not _same_point(observations[-1], end_coordinate):
+            observations.append(
+                _endpoint_observation(
+                    "end",
+                    end_coordinate,
+                    end_time,
+                )
+            )
+
+    trip.observations = observations
+    trip.stats.distance_meters = sum(
+        haversine_meters(
+            first.latitude,
+            first.longitude,
+            second.latitude,
+            second.longitude,
         )
-    if end_index is None:
-        end_index = len(observations) - 1
-
-    if end_index < start_index:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "End point must be at or after the start point. "
-                "Select the same start/end point or use 'End at start' for a loop."
-            ),
-        )
-
-    trip.observations = observations[start_index : end_index + 1]
+        for first, second in zip(observations, observations[1:])
+    )
 
 
 def _route_progresses(route_model, observation_count: int) -> list[float]:
@@ -471,85 +506,9 @@ def _trip_payload(
 
 
 
-async def _process_uploaded_media(
-    session_id: str,
-    upload_id: str,
-    filename: str,
-    target: Path,
-    original_bytes: int,
-) -> None:
-    status_path = _status_path(session_id, upload_id)
-
-    async with UPLOAD_PROCESSING_SEMAPHORE:
-        try:
-            if not status_path.exists():
-                target.unlink(missing_ok=True)
-                return
-
-            extracted = await ExifToolExtractor().extract([target])
-            if not extracted:
-                raise RuntimeError("No metadata record returned")
-
-            media = extracted[0]
-            media.id = upload_id
-            media.filename = filename
-            media.path = target
-
-            if not status_path.exists():
-                target.unlink(missing_ok=True)
-                return
-
-            compressed = False
-            if media.media_type is MediaType.PHOTO:
-                media.path, compressed = await asyncio.to_thread(
-                    _compress_photo_after_metadata,
-                    media,
-                )
-
-            if not status_path.exists():
-                media.path.unlink(missing_ok=True)
-                return
-
-            _metadata_path(session_id, upload_id).write_text(
-                media.model_dump_json(indent=2),
-                encoding="utf-8",
-            )
-
-            ready = _upload_payload(
-                session_id,
-                media,
-                original_bytes=original_bytes,
-                compressed=compressed,
-            )
-            ready["state"] = "ready"
-            _write_upload_status(
-                session_id,
-                upload_id,
-                ready,
-            )
-        except Exception as exc:
-            target.unlink(missing_ok=True)
-            metadata_path = _metadata_path(session_id, upload_id)
-            metadata_path.unlink(missing_ok=True)
-
-            if status_path.exists():
-                _write_upload_status(
-                    session_id,
-                    upload_id,
-                    {
-                        "id": upload_id,
-                        "filename": filename,
-                        "state": "failed",
-                        "detail": str(exc),
-                        "original_bytes": original_bytes,
-                    },
-                )
-
-
-@api.post("/api/upload-sessions/{session_id}/media", status_code=202)
+@api.post("/api/upload-sessions/{session_id}/media", status_code=201)
 async def upload_media(
     session_id: str,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> dict:
     store.cleanup_expired(settings.data_ttl_seconds)
@@ -558,39 +517,21 @@ async def upload_media(
     filename = Path(file.filename or f"upload-{uuid4()}").name
 
     target = await _save_upload(file, workspace / "uploads")
-    original_bytes = target.stat().st_size
     upload_id = str(uuid4())
-
-    processing = {
+    size_bytes = target.stat().st_size
+    uploaded = {
         "id": upload_id,
         "filename": filename,
-        "state": "processing",
-        "original_bytes": original_bytes,
-        "stored_bytes": original_bytes,
-        "compressed": False,
-        "status_url": (
-            f"/api/upload-sessions/{session_id}/media/{upload_id}/status"
-        ),
+        "state": "uploaded",
+        "size_bytes": size_bytes,
+        "stored_bytes": size_bytes,
         "preview_url": (
             f"/api/upload-sessions/{session_id}/media/{upload_id}/preview"
         ),
         "_path": str(target),
     }
-    _write_upload_status(
-        session_id,
-        upload_id,
-        processing,
-    )
-
-    background_tasks.add_task(
-        _process_uploaded_media,
-        session_id,
-        upload_id,
-        filename,
-        target,
-        original_bytes,
-    )
-    return _public_upload_status(processing)
+    _write_upload_status(session_id, upload_id, uploaded)
+    return _public_upload_status(uploaded)
 
 
 @api.get("/api/upload-sessions/{session_id}/media/{upload_id}/status")
@@ -607,29 +548,15 @@ async def uploaded_media_status(
 @api.delete("/api/upload-sessions/{session_id}/media/{upload_id}")
 async def discard_uploaded_media(session_id: str, upload_id: str) -> dict:
     session_id = _uuid(session_id, "upload session id")
-    metadata_path = _metadata_path(session_id, upload_id)
     status_path = _status_path(session_id, upload_id)
-
-    if metadata_path.exists():
-        try:
-            media = MediaPoint.model_validate_json(
-                metadata_path.read_text(encoding="utf-8")
-            )
-            media.path.unlink(missing_ok=True)
-        finally:
-            metadata_path.unlink(missing_ok=True)
-
     if status_path.exists():
         try:
-            status = json.loads(
-                status_path.read_text(encoding="utf-8")
-            )
+            status = json.loads(status_path.read_text(encoding="utf-8"))
             raw_path = status.get("_path")
             if raw_path:
                 Path(raw_path).unlink(missing_ok=True)
         finally:
             status_path.unlink(missing_ok=True)
-
     return {"status": "discarded", "id": upload_id}
 
 
@@ -638,34 +565,27 @@ async def discard_uploaded_media(session_id: str, upload_id: str) -> dict:
     include_in_schema=False,
 )
 async def uploaded_media_preview(session_id: str, upload_id: str):
-    media = _load_uploaded_media(session_id, upload_id)
-    if media.media_type.value == "video":
+    session_id = _uuid(session_id, "upload session id")
+    record = _load_upload_record(session_id, upload_id)
+    path = Path(record["_path"])
+    media_type = mimetypes.guess_type(record["filename"])[0] or ""
+
+    if media_type.startswith("video/") or path.suffix.lower() in {".mov", ".mp4", ".m4v"}:
         return FileResponse(
-            media.path,
-            media_type=(
-                mimetypes.guess_type(media.path.name)[0]
-                or "video/mp4"
-            ),
+            path,
+            media_type=media_type or "video/mp4",
             content_disposition_type="inline",
         )
 
     try:
-        with Image.open(media.path) as image:
+        with Image.open(path) as image:
             image = ImageOps.exif_transpose(image)
             image.thumbnail((1280, 1280))
             if image.mode not in {"RGB", "L"}:
                 image = image.convert("RGB")
             buffer = BytesIO()
-            image.save(
-                buffer,
-                format="JPEG",
-                quality=88,
-                optimize=True,
-            )
-        return Response(
-            content=buffer.getvalue(),
-            media_type="image/jpeg",
-        )
+            image.save(buffer, format="JPEG", quality=88, optimize=True)
+        return Response(content=buffer.getvalue(), media_type="image/jpeg")
     except Exception as exc:
         raise HTTPException(
             status_code=422,
@@ -678,10 +598,7 @@ async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
     store.cleanup_expired(settings.data_ttl_seconds)
 
     if not request.upload_ids:
-        raise HTTPException(
-            status_code=400,
-            detail="No retained media to analyze",
-        )
+        raise HTTPException(status_code=400, detail="No retained media to analyze")
     if len(request.upload_ids) > settings.max_files:
         raise HTTPException(
             status_code=413,
@@ -689,27 +606,57 @@ async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
         )
 
     upload_ids = list(dict.fromkeys(request.upload_ids))
-    upload_id_set = set(upload_ids)
-
-    if request.start_media_id and request.start_media_id not in upload_id_set:
-        raise HTTPException(
-            status_code=400,
-            detail="Start point is not in retained media",
-        )
-    if request.end_media_id and request.end_media_id not in upload_id_set:
-        raise HTTPException(
-            status_code=400,
-            detail="End point is not in retained media",
-        )
-
-    media = [
-        _load_uploaded_media(request.session_id, upload_id)
+    records = [
+        _load_upload_record(request.session_id, upload_id)
         for upload_id in upload_ids
     ]
+    paths = [Path(record["_path"]) for record in records]
+
+    try:
+        extracted = await ExifToolExtractor().extract(paths)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Metadata extraction failed: {exc}",
+        ) from exc
+
+    extracted_by_path = {
+        str(item.path.resolve()): item
+        for item in extracted
+    }
+    media: list[MediaPoint] = []
+    for record, path in zip(records, paths):
+        item = extracted_by_path.get(str(path.resolve()))
+        if item is None:
+            continue
+        item.id = record["id"]
+        item.filename = record["filename"]
+        item.path = path
+
+        if item.media_type is MediaType.PHOTO:
+            item.path, _ = await asyncio.to_thread(
+                _compress_photo_after_metadata,
+                item,
+            )
+
+        media.append(item)
+
+    if not media:
+        raise HTTPException(
+            status_code=422,
+            detail="No supported media metadata could be analyzed",
+        )
+
+    start_coordinate = await _resolve_location(request.start_location)
+    end_coordinate = (
+        None
+        if request.return_to_start
+        else await _resolve_location(request.end_location)
+    )
 
     trip_gap = (
         timedelta(days=36500)
-        if request.keep_as_one_trip
+        if request.keep_as_one_trip or request.return_to_start
         else timedelta(hours=12)
     )
     trips = TripBuilder(trip_gap=trip_gap).build(media)
@@ -722,23 +669,15 @@ async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
 
     results = []
     for trip in trips:
-        trip_media_ids = {item.id for item in trip.media}
-        start_media_id = (
-            request.start_media_id
-            if request.start_media_id in trip_media_ids
-            else None
-        )
-        end_media_id = (
-            request.end_media_id
-            if request.end_media_id in trip_media_ids
-            else None
-        )
+        trip_index = trips.index(trip)
+        is_first_trip = trip_index == 0
+        is_last_trip = trip_index == len(trips) - 1
 
         _apply_route_endpoints(
             trip,
-            start_media_id,
-            end_media_id,
-            request.return_to_start,
+            start_coordinate if is_first_trip else None,
+            end_coordinate if is_last_trip else None,
+            request.return_to_start and len(trips) == 1,
         )
 
         route = None
