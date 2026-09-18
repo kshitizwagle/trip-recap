@@ -1,0 +1,3 @@
+[server]
+useStarlette = true
+headless = true
