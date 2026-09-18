@@ -198,8 +198,44 @@ function locationRequestValue(field){
 }
 bindLocationField(locationFields.start);
 bindLocationField(locationFields.end);
-function retainedUploads(){return state.uploads.filter(item=>!item.discarded&&item.status==="uploaded")}function pendingUploads(){return state.uploads.some(item=>!item.discarded&&(item.status==="queued"||item.status==="uploading"))}
-function updateAnalyzeState(){els.analyze.disabled=pendingUploads()||retainedUploads().length===0}function clearResult(){state.current=null;window.tripReady=false;els.result.style.display="none";if(state.map){state.map.remove();state.map=null}hideMediaOverlay()}
+function retainedUploads(){return state.uploads.filter(item=>!item.discarded&&item.status==="uploaded"&&item.serverId)}function pendingUploads(){return state.uploads.some(item=>!item.discarded&&(item.status==="queued"||item.status==="uploading"))}
+function updateAnalyzeState(){els.analyze.disabled=pendingUploads()||retainedUploads().length===0}
+function removeUnavailableUpload(record,message){
+  record.discarded=true;
+  if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);
+  cardFor(record)?.remove();
+  state.uploads=state.uploads.filter(item=>item!==record);
+  if(message){
+    els.status.className="error";
+    els.status.textContent=message;
+  }
+}
+async function availableRetainedUploads(){
+  const uploads=retainedUploads();
+  if(!uploads.length)return [];
+
+  const checks=await Promise.all(uploads.map(async record=>{
+    try{
+      const response=await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId+"/status",{cache:"no-store"});
+      const parsed=await readApiResponse(response);
+      if(parsed.ok&&parsed.data?.state==="uploaded")return {record,available:true};
+      if(response.status===404||response.status===409)return {record,available:false};
+      return {record,available:true};
+    }catch{
+      return {record,available:true};
+    }
+  }));
+
+  const unavailable=checks.filter(item=>!item.available).map(item=>item.record);
+  unavailable.forEach(record=>removeUnavailableUpload(record));
+
+  if(unavailable.length){
+    els.status.className="error";
+    els.status.textContent=unavailable.length+" unavailable upload"+(unavailable.length===1?" was":"s were")+" removed before route generation.";
+  }
+
+  return checks.filter(item=>item.available).map(item=>item.record);
+}function clearResult(){state.current=null;window.tripReady=false;els.result.style.display="none";if(state.map){state.map.remove();state.map=null}hideMediaOverlay()}
 function cardFor(record){return document.querySelector('[data-client-id="'+record.clientId+'"]')}function setProgress(record,percent,text){const card=cardFor(record);if(!card)return;const bar=card.querySelector(".progress>div"),label=card.querySelector(".progress-text");if(bar)bar.style.width=Math.max(0,Math.min(100,percent))+"%";if(label)label.textContent=text}
 function createCard(record){const card=document.createElement("div");card.className="media-card";card.dataset.clientId=record.clientId;const thumb=document.createElement("div");thumb.className="media-thumb";const url=URL.createObjectURL(record.file);record.objectUrl=url;if(record.file.type.startsWith("video/")||/\.(mov|mp4|m4v)$/i.test(record.file.name)){const video=document.createElement("video");video.src=url;video.muted=true;video.playsInline=true;video.preload="metadata";thumb.appendChild(video)}else if(!/\.(heic|heif)$/i.test(record.file.name)){const img=document.createElement("img");img.src=url;img.alt=record.file.name;img.onerror=()=>{thumb.textContent="Preview unavailable"};thumb.appendChild(img)}else thumb.textContent="HEIC preview available after upload";const meta=document.createElement("div");meta.className="media-meta";meta.innerHTML='<div class="filename" title="'+escapeHtml(record.file.name)+'">'+escapeHtml(record.file.name)+'</div><div class="muted">'+humanSize(record.file.size)+'</div><div class="progress"><div></div></div><div class="progress-text">Queued</div><div class="storage-note"></div><div class="media-actions"><button class="danger discard">Discard</button></div>';meta.querySelector(".discard").addEventListener("click",()=>discardUpload(record));card.append(thumb,meta);els.mediaGrid.appendChild(card)}
 function addFiles(fileList){
@@ -289,7 +325,7 @@ function startUpload(record){
 }
 async function discardUpload(record){record.discarded=true;state.uploadQueue=state.uploadQueue.filter(item=>item!==record);if(record.xhr&&record.status==="uploading")record.xhr.abort();if(record.serverId){try{await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,{method:"DELETE"})}catch{}}if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);cardFor(record)?.remove();state.uploads=state.uploads.filter(item=>item!==record);updateAnalyzeState();clearResult();els.status.className="";els.status.textContent="Media discarded. It will not be used for the route."}
 els.dropZone.addEventListener("click",()=>els.fileInput.click());els.fileInput.addEventListener("change",()=>addFiles(els.fileInput.files));["dragenter","dragover"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.add("dragging")}));["dragleave","drop"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.remove("dragging")}));els.dropZone.addEventListener("drop",event=>addFiles(event.dataTransfer.files));els.returnStart.addEventListener("change",()=>{els.endPoint.disabled=els.returnStart.checked;if(els.returnStart.checked)hideLocationSuggestions(locationFields.end)});
-async function analyze(){const uploads=retainedUploads();if(!uploads.length||pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Extracting metadata and tracing route in the container…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_location:locationRequestValue(locationFields.start),end_location:els.returnStart.checked?null:locationRequestValue(locationFields.end),return_to_start:els.returnStart.checked};try{const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),parsed=await readApiResponse(response),data=parsed.data;if(!parsed.ok)throw new Error(parsed.detail||"Route analysis failed");if(!data)throw new Error("Route analysis returned an empty response");els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}else throw new Error("Route analysis returned no trips")}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
+async function analyze(){if(pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Checking retained uploads…";try{const uploads=await availableRetainedUploads();if(!uploads.length)throw new Error("No available uploaded media to analyze.");els.status.textContent="Extracting metadata and tracing route in the container…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_location:locationRequestValue(locationFields.start),end_location:els.returnStart.checked?null:locationRequestValue(locationFields.end),return_to_start:els.returnStart.checked};const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),parsed=await readApiResponse(response),data=parsed.data;if(!parsed.ok)throw new Error(parsed.detail||"Route analysis failed");if(!data)throw new Error("Route analysis returned an empty response");if(data.ignored_upload_count){const ignored=new Set(data.ignored_upload_ids||[]);state.uploads.filter(item=>ignored.has(item.serverId)).forEach(record=>removeUnavailableUpload(record));}els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}else throw new Error("Route analysis returned no trips")}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
 const SATELLITE_TILES="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";function satelliteStyle(){return{version:8,sources:{satellite:{type:"raster",tiles:[SATELLITE_TILES],tileSize:256,attribution:"EOX Sentinel-2 cloudless"}},layers:[{id:"satellite",type:"raster",source:"satellite"}]}}
 function segmentDistance(a,b){const toRad=value=>value*Math.PI/180,lat1=toRad(a[1]),lat2=toRad(b[1]),dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))}function routeCoordinates(data){if(data.route?.geometry?.coordinates?.length)return data.route.geometry.coordinates;return data.observations.map(o=>[o.longitude,o.latitude])}function setupDistance(coords){state.cumulative=[0];for(let i=1;i<coords.length;i++)state.cumulative.push(state.cumulative[i-1]+segmentDistance(coords[i-1],coords[i]));state.totalDistance=state.cumulative.at(-1)||0}function positionAt(coords,progress){if(!coords.length)return null;if(coords.length===1)return{point:coords[0],index:0};const target=Math.max(0,Math.min(1,progress))*state.totalDistance;let index=0;while(index<state.cumulative.length-2&&state.cumulative[index+1]<target)index++;const a=coords[index],b=coords[index+1],start=state.cumulative[index],end=state.cumulative[index+1],length=Math.max(end-start,.000001),t=Math.max(0,Math.min(1,(target-start)/length));return{point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],index}}
 function setRouteProgress(progress){const data=state.current;if(!data||!state.marker||!state.map)return;const coords=routeCoordinates(data),result=positionAt(coords,progress);if(!result)return;state.marker.setLngLat(result.point);const nextIndex=Math.min(result.index+1,coords.length-1),a=coords[result.index],b=coords[nextIndex];if(state.vehicleGlyph&&a&&b&&state.map){const pa=state.map.project(a),pb=state.map.project(b);if(Math.abs(pb.x-pa.x)>.25)state.vehicleGlyph.style.setProperty("--direction",pb.x>=pa.x?1:-1)}const traveled=coords.slice(0,result.index+1).concat([result.point]);state.map.getSource("traveled")?.setData({type:"Feature",properties:{},geometry:{type:"LineString",coordinates:traveled}})}
