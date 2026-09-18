@@ -109,3 +109,46 @@ def test_reverse_geocoder_requests_english_and_caches_raw_payload(
     assert specific == "Boudha Stupa"
     assert requested_language == "en"
     assert calls == 1
+
+
+def test_forward_geocoder_returns_coordinates_and_caches(
+    tmp_path: Path,
+) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        assert request.url.path == "/search"
+        assert request.url.params.get("q") == "Patan Durbar Square"
+        assert request.url.params.get("accept-language") == "en"
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "lat": "27.6730",
+                    "lon": "85.3250",
+                    "display_name": "Patan Durbar Square, Lalitpur, Nepal",
+                }
+            ],
+        )
+
+    with httpx.Client(
+        transport=httpx.MockTransport(handler)
+    ) as client:
+        geocoder = NominatimReverseGeocoder(
+            tmp_path,
+            base_url="https://nominatim.test",
+            min_interval_seconds=0,
+            client=client,
+        )
+        first = geocoder.forward("Patan Durbar Square")
+        second = geocoder.forward("Patan Durbar Square")
+
+    assert first == {
+        "latitude": 27.673,
+        "longitude": 85.325,
+        "display_name": "Patan Durbar Square, Lalitpur, Nepal",
+    }
+    assert second == first
+    assert calls == 1
