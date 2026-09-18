@@ -25,7 +25,7 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from app.config import settings
-from app.geocoding import NominatimReverseGeocoder
+from app.geocoding import NominatimReverseGeocoder, PhotonPlaceSearch
 from app.metadata.extractor import SUPPORTED_EXTENSIONS, ExifToolExtractor
 from app.models.media import MediaPoint, MediaType
 from app.renderer.service import RenderService
@@ -384,6 +384,29 @@ async def favicon() -> FileResponse:
 @api.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@api.get("/api/locations/suggest")
+async def suggest_locations(
+    q: str = Query(..., min_length=3, max_length=120),
+    limit: int = Query(5, ge=1, le=8),
+) -> dict:
+    search = PhotonPlaceSearch(
+        store.root / "cache" / "places"
+    )
+    try:
+        suggestions = await asyncio.to_thread(
+            search.search,
+            q,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Location suggestions failed: {exc}",
+        ) from exc
+
+    return {"suggestions": suggestions}
 
 
 def _unique_target(directory: Path, filename: str) -> Path:
