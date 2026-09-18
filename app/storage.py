@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import time
 from pathlib import Path
@@ -13,12 +12,7 @@ from app.models.trip import Trip
 
 class TripStore:
     def __init__(self, root: Path | None = None) -> None:
-        self.root = root or Path(
-            os.environ.get(
-                "TRIP_RECAP_DATA_DIR",
-                "/tmp/trip-recap",
-            )
-        )
+        self.root = root or Path("/tmp/trip-recap")
         for path in (
             self.root / "trips",
             self.root / "workspaces",
