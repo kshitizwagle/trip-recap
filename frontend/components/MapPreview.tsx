@@ -225,7 +225,7 @@ export default function MapPreview({
         style: selectedStyle === 'Satellite' ? satelliteStyle() : 'https://tiles.openfreemap.org/styles/liberty',
         center: (coords[0] ?? [85.324, 27.676]) as [number, number],
         zoom: coords.length ? 8 : 6,
-        attributionControl: true,
+        attributionControl: { compact: true },
         dragPan: true,
         dragRotate: false,
         keyboard: true,
