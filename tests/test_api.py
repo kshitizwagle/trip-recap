@@ -25,6 +25,7 @@ def test_root_contains_fastapi_trip_ui() -> None:
     assert "start-coordinates" in response.text
     assert "end-coordinates" in response.text
     assert "pollUploadStatus" not in response.text
+    assert "availableRetainedUploads" in response.text
     assert "readApiResponse" in response.text
     assert "response.json()" not in response.text
     assert "playback-speed" in response.text
@@ -77,3 +78,23 @@ def test_location_suggestions(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["suggestions"][0]["latitude"] == 27.673
     assert response.json()["suggestions"][0]["longitude"] == 85.325
+
+
+def test_analyze_session_ignores_missing_uploads() -> None:
+    response = client.post(
+        "/api/trips/analyze-session",
+        json={
+            "session_id": "4c1b0f15-62e7-4ef2-8c5d-e448e8ad0d63",
+            "upload_ids": [
+                "d1b8d04d-6cbe-4860-a35b-93fa2f5abfff",
+            ],
+            "keep_as_one_trip": True,
+            "start_location": None,
+            "end_location": None,
+            "return_to_start": False,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "No available retained uploads" in response.json()["detail"]
+    assert response.json()["detail"] != "Upload not found"
