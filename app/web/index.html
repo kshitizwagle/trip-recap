@@ -4,1017 +4,174 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Trip Recap</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/favicon.png">
   <link href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet">
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
   <style>
-    :root {
-      color-scheme: dark;
-      --bg:#0d0f12;
-      --panel:#15181d;
-      --panel2:#1b1f25;
-      --border:#2a3038;
-      --text:#f4f6f8;
-      --muted:#9ca5b0;
-      --accent:#e8ebef;
-      --dark:#111827;
-      --ok:#7dd3a6;
-      --danger:#f59e9e;
-    }
-    * { box-sizing:border-box; }
-    body {
-      margin:0;
-      background:var(--bg);
-      color:var(--text);
-      font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    }
-    button,select,input { font:inherit; }
-    button {
-      border:1px solid var(--border);
-      border-radius:9px;
-      padding:10px 14px;
-      background:#f5f7fa;
-      color:#0d1117;
-      font-weight:650;
-      cursor:pointer;
-    }
-    button.secondary { background:var(--panel2);color:var(--text); }
-    button:disabled { opacity:.45;cursor:not-allowed; }
-    .app { max-width:1440px;margin:auto;padding:26px; }
-    h1 { margin:0 0 6px;font-size:32px; }
-    .lead { margin:0 0 22px;color:var(--muted); }
-    .card {
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:16px;
-      margin-bottom:16px;
-    }
-    .drop-zone {
-      border:1px dashed #555e6a;
-      border-radius:12px;
-      padding:28px;
-      text-align:center;
-      background:#111419;
-      cursor:pointer;
-    }
-    .drop-zone.dragging { border-color:white;background:#191d23; }
-    .drop-zone strong { display:block;font-size:16px;margin-bottom:5px; }
-    .muted { color:var(--muted); }
-    #file-input { display:none; }
-    .media-grid {
-      display:grid;
-      grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
-      gap:12px;
-      margin-top:16px;
-    }
-    .media-card {
-      overflow:hidden;
-      background:#101318;
-      border:1px solid var(--border);
-      border-radius:11px;
-    }
-    .media-thumb {
-      height:145px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:#090b0e;
-      color:var(--muted);
-      overflow:hidden;
-    }
-    .media-thumb img,.media-thumb video {
-      width:100%;height:100%;object-fit:cover;
-    }
-    .media-meta { padding:10px; }
-    .filename {
-      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-      margin-bottom:5px;font-weight:600;
-    }
-    .progress {
-      height:6px;background:#2b313a;border-radius:999px;overflow:hidden;margin-top:8px;
-    }
-    .progress > div {
-      height:100%;width:0;background:#e5e7eb;transition:width .1s linear;
-    }
-    .progress-text { margin-top:4px;color:var(--muted);font-size:12px; }
-    .controls {
-      display:grid;
-      grid-template-columns:repeat(4,minmax(0,1fr));
-      gap:12px;
-      margin-top:16px;
-    }
-    label.control { display:flex;flex-direction:column;gap:6px;color:var(--muted); }
-    select {
-      width:100%;padding:10px;border-radius:9px;border:1px solid var(--border);
-      background:#111419;color:var(--text);
-    }
-    .checkbox {
-      display:flex;align-items:center;gap:8px;height:42px;color:var(--text);
-    }
-    #analyze { width:100%;margin-top:14px; }
-    #status { margin-top:10px;color:var(--muted);min-height:20px; }
-    #result { display:none; }
-    .metrics {
-      display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px;
-    }
-    .metric {
-      padding:12px;border:1px solid var(--border);border-radius:10px;background:#111419;
-    }
-    .metric .label { color:var(--muted);font-size:12px; }
-    .metric .value { font-size:22px;font-weight:700;margin-top:3px; }
-    .result-actions { display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px; }
-    .map-wrap {
-      position:relative;height:700px;border-radius:12px;overflow:hidden;
-      border:1px solid var(--border);background:#0b0d10;
-    }
-    #map { position:absolute;inset:0; }
-    #map-controls {
-      position:absolute;z-index:10;top:12px;left:12px;display:flex;gap:8px;
-    }
-    .vehicle-marker {
-      width:38px;height:38px;display:flex;align-items:center;justify-content:center;
-      pointer-events:none;z-index:10;
-    }
-    .vehicle-glyph {
-      display:block;font-size:30px;line-height:1;
-      animation:vehicle-bob .55s ease-in-out infinite alternate;
-      filter:drop-shadow(0 3px 4px rgba(0,0,0,.45));user-select:none;
-    }
-    @keyframes vehicle-bob {
-      from { transform:translateY(0); }
-      to { transform:translateY(-2px); }
-    }
-    .observation-wrap {
-      display:flex;align-items:center;gap:6px;white-space:nowrap;pointer-events:none;
-    }
-    .observation-dot {
-      width:11px;height:11px;border-radius:50%;background:#fff;border:3px solid #111827;
-      box-shadow:0 2px 8px #0008;flex:0 0 auto;
-    }
-    .place-label {
-      background:rgba(17,24,39,.92);color:white;border-radius:7px;padding:4px 8px;
-      font:600 11px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);
-      max-width:190px;overflow:hidden;text-overflow:ellipsis;
-    }
-    #media-overlay {
-      position:absolute;z-index:8;left:50%;bottom:24px;transform:translateX(-50%);
-      max-width:min(82%,760px);max-height:42%;background:#111;border-radius:14px;
-      padding:8px;display:none;box-shadow:0 10px 40px #0008;
-    }
-    #media-overlay img,#media-overlay video {
-      display:block;max-width:100%;max-height:38vh;border-radius:10px;
-    }
-    details {
-      border:1px solid var(--border);border-radius:10px;background:#111419;
-      margin-top:12px;overflow:hidden;
-    }
-    summary { cursor:pointer;padding:13px 14px;font-weight:650; }
-    .details-body { padding:0 14px 14px;overflow:auto; }
-    table { width:100%;border-collapse:collapse;font-size:13px; }
-    th,td { padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top; }
-    th { color:var(--muted);font-weight:600; }
-    .json-tabs { display:flex;gap:6px;margin-bottom:8px; }
-    .json-tabs button { padding:7px 10px; }
-    pre {
-      margin:0;max-height:460px;overflow:auto;background:#090b0e;padding:12px;
-      border-radius:8px;white-space:pre-wrap;word-break:break-word;
-    }
-    .download-row { display:flex;gap:8px;flex-wrap:wrap; }
-    .error { color:var(--danger); }
-    .ok { color:var(--ok); }
-    .render-only .app-header,.render-only #upload-card,.render-only .result-top,
-    .render-only details,.render-only #map-controls { display:none!important; }
-    .render-only .app { max-width:none;padding:0;height:100vh; }
-    .render-only #result { display:block!important;height:100vh; }
-    .render-only .card { border:0;padding:0;margin:0;height:100vh; }
-    .render-only .map-wrap { height:100vh;border:0;border-radius:0; }
-    @media (max-width:850px) {
-      .app { padding:14px; }
-      .controls { grid-template-columns:1fr 1fr; }
-      .metrics { grid-template-columns:1fr 1fr; }
-      .map-wrap { height:560px; }
-    }
+    :root{color-scheme:dark;--bg:#0d0f12;--panel:#15181d;--panel2:#1b1f25;--border:#2a3038;--text:#f4f6f8;--muted:#9ca5b0;--ok:#7dd3a6;--danger:#f59e9e}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    button,select,input{font:inherit}button{border:1px solid var(--border);border-radius:9px;padding:10px 14px;background:#f5f7fa;color:#0d1117;font-weight:650;cursor:pointer}button.secondary{background:var(--panel2);color:var(--text)}button.danger{background:#2b1719;color:#ffc7cc;border-color:#633038}button:disabled{opacity:.45;cursor:not-allowed}
+    select{width:100%;padding:10px;border-radius:9px;border:1px solid var(--border);background:#111419;color:var(--text)}
+    .app{max-width:1440px;margin:auto;padding:26px}.app-title{display:flex;align-items:center;gap:12px}.app-title img{width:44px;height:44px;border-radius:10px}h1{margin:0 0 6px;font-size:32px}.lead{margin:0 0 22px;color:var(--muted)}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}.drop-zone{border:1px dashed #555e6a;border-radius:12px;padding:28px;text-align:center;background:#111419;cursor:pointer}.drop-zone.dragging{border-color:#fff;background:#191d23}.drop-zone strong{display:block;font-size:16px;margin-bottom:5px}.muted{color:var(--muted)}#file-input{display:none}
+    .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-top:16px}.media-card{overflow:hidden;background:#101318;border:1px solid var(--border);border-radius:11px}.media-thumb{height:145px;display:flex;align-items:center;justify-content:center;background:#090b0e;color:var(--muted);overflow:hidden}.media-thumb img,.media-thumb video{width:100%;height:100%;object-fit:cover}.media-meta{padding:10px}.filename{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:5px;font-weight:600}.media-actions{display:flex;gap:7px;margin-top:9px}.media-actions button{padding:6px 9px;font-size:12px}
+    .progress{height:6px;background:#2b313a;border-radius:999px;overflow:hidden;margin-top:8px}.progress>div{height:100%;width:0;background:#e5e7eb;transition:width .1s linear}.progress-text{margin-top:4px;color:var(--muted);font-size:12px}.storage-note{margin-top:3px;color:var(--muted);font-size:11px}
+    .controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}label.control{display:flex;flex-direction:column;gap:6px;color:var(--muted)}.checkbox{display:flex;align-items:center;gap:8px;height:42px;color:var(--text)}#analyze{width:100%;margin-top:14px}#status{margin-top:10px;color:var(--muted);min-height:20px}.error{color:var(--danger)!important}.ok{color:var(--ok)!important}
+    #result{display:none}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}.metric{padding:12px;border:1px solid var(--border);border-radius:10px;background:#111419}.metric .label{color:var(--muted);font-size:12px}.metric .value{font-size:22px;font-weight:700;margin-top:3px}
+    .map-wrap{position:relative;height:700px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#0b0d10}#map{position:absolute;inset:0}#map-controls{position:absolute;z-index:10;top:12px;left:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}#map-controls select{width:auto;padding:9px;background:#15181d}#map-controls .checkbox-pill{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:#15181d;color:#fff}
+    .vehicle-marker{width:38px;height:38px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10}.vehicle-glyph{--direction:1;display:block;font-size:30px;line-height:1;animation:vehicle-bob .55s ease-in-out infinite alternate;filter:drop-shadow(0 3px 4px rgba(0,0,0,.45));user-select:none}@keyframes vehicle-bob{from{transform:scaleX(var(--direction)) translateY(0)}to{transform:scaleX(var(--direction)) translateY(-2px)}}
+    .observation-wrap{display:flex;align-items:center;gap:6px;white-space:nowrap;pointer-events:none}.observation-dot{width:11px;height:11px;border-radius:50%;background:#fff;border:3px solid #111827;box-shadow:0 2px 8px #0008;flex:0 0 auto}.place-label{background:rgba(17,24,39,.92);color:#fff;border-radius:7px;padding:4px 8px;font:600 11px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);max-width:190px;overflow:hidden;text-overflow:ellipsis}
+    #media-overlay{position:absolute;z-index:8;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(82%,760px);max-height:42%;background:#111;border-radius:14px;padding:8px;display:none;box-shadow:0 10px 40px #0008}#media-overlay img,#media-overlay video{display:block;max-width:100%;max-height:38vh;border-radius:10px}
+    details{border:1px solid var(--border);border-radius:10px;background:#111419;margin-top:12px;overflow:hidden}summary{cursor:pointer;padding:13px 14px;font-weight:650}.details-body{padding:0 14px 14px;overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}.json-tabs,.download-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}pre{margin:0;max-height:460px;overflow:auto;background:#090b0e;padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-word}
+    .render-only .app-header,.render-only #upload-card,.render-only .result-top,.render-only details,.render-only #map-controls{display:none!important}.render-only .app{max-width:none;padding:0;height:100vh}.render-only #result{display:block!important;height:100vh}.render-only .card{border:0;padding:0;margin:0;height:100vh}.render-only .map-wrap{height:100vh;border:0;border-radius:0}@media(max-width:900px){.app{padding:14px}.controls{grid-template-columns:1fr 1fr}.metrics{grid-template-columns:1fr 1fr}.map-wrap{height:560px}}
   </style>
 </head>
 <body>
-<div class="app" id="app">
+<div class="app">
   <div class="app-header">
-    <h1>Trip Recap</h1>
-    <p class="lead">Upload original photos and videos. Capture time and GPS metadata reconstruct the route automatically.</p>
+    <div class="app-title"><img src="/favicon.png" alt=""><div><h1>Trip Recap</h1><p class="lead">Upload original photos and videos. Files upload immediately, then only retained media is used to trace the trip.</p></div></div>
   </div>
 
   <section class="card" id="upload-card">
-    <div class="drop-zone" id="drop-zone">
-      <strong>Drop all photos and videos from the trip</strong>
-      <span class="muted">or click to choose files</span>
-      <input id="file-input" type="file" multiple accept=".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*">
-    </div>
+    <div class="drop-zone" id="drop-zone"><strong>Drop photos and videos from the trip</strong><span class="muted">or click to choose files. Up to 4 files upload in parallel.</span><input id="file-input" type="file" multiple accept=".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*"></div>
     <div id="media-grid" class="media-grid"></div>
-
     <div class="controls">
-      <label class="control">
-        Trip splitting
-        <span class="checkbox"><input id="keep-one" type="checkbox" checked> Treat all selected media as one trip</span>
-      </label>
-      <label class="control">
-        Animation vehicle
-        <select id="vehicle">
-          <option value="🛵">Scooter</option>
-          <option value="🚗">Car</option>
-          <option value="🏍️">Motorcycle</option>
-          <option value="🚲">Bicycle</option>
-          <option value="🚙">Jeep</option>
-        </select>
-      </label>
-      <label class="control">
-        Place-name detail
-        <select id="place-detail">
-          <option value="specific">Specific</option>
-          <option value="neighborhood" selected>Neighborhood</option>
-          <option value="city">City / Town</option>
-          <option value="region">Region</option>
-        </select>
-      </label>
-      <label class="control">
-        Map style
-        <select id="map-style">
-          <option>Street</option>
-          <option>Satellite</option>
-          <option>Hybrid</option>
-        </select>
-      </label>
+      <label class="control">Start point<select id="start-point"><option value="">Auto · first GPS point</option></select></label>
+      <label class="control">End point<select id="end-point"><option value="">Auto · last GPS point</option></select></label>
+      <label class="control">Loop route<span class="checkbox"><input id="return-start" type="checkbox"> End at start point</span></label>
+      <label class="control">Trip splitting<span class="checkbox"><input id="keep-one" type="checkbox" checked> Treat retained media as one trip</span></label>
+      <label class="control">Animation vehicle<select id="vehicle"><option value="🛵">Scooter</option><option value="🚗">Car</option><option value="🏍️">Motorcycle</option><option value="🚲">Bicycle</option><option value="🚙">Jeep</option></select></label>
+      <label class="control">Place-name detail<select id="place-detail"><option value="specific">Specific</option><option value="neighborhood" selected>Neighborhood</option><option value="city">City / Town</option><option value="region">Region</option></select></label>
+      <label class="control">Map style<select id="map-style"><option>Street</option><option>Satellite</option><option>Hybrid</option></select></label>
     </div>
-
-    <button id="analyze" disabled>Determine route</button>
-    <div id="status"></div>
+    <button id="analyze" disabled>Determine route from retained media</button><div id="status"></div>
   </section>
 
-  <section id="result">
-    <div class="card">
-      <div class="result-top">
-        <div class="metrics">
-          <div class="metric"><div class="label">Media</div><div id="m-media" class="value">0</div></div>
-          <div class="metric"><div class="label">GPS media</div><div id="m-gps" class="value">0</div></div>
-          <div class="metric"><div class="label">Stops</div><div id="m-stops" class="value">0</div></div>
-          <div class="metric"><div class="label">Segments</div><div id="m-segments" class="value">0</div></div>
-          <div class="metric"><div class="label">Route</div><div id="m-route" class="value">0 km</div></div>
-        </div>
-        <div id="trip-status" class="muted"></div>
-      </div>
-
-      <div class="map-wrap">
-        <div id="map"></div>
-        <div id="map-controls">
-          <button id="replay">Replay route</button>
-          <button id="fit" class="secondary">Fit route</button>
-          <button id="render" class="secondary">Export MP4</button>
-          <a id="video-download" hidden></a>
-        </div>
-        <div id="media-overlay"></div>
-      </div>
-
-      <details>
-        <summary>Route observations</summary>
-        <div class="details-body">
-          <table>
-            <thead><tr><th>#</th><th>Place</th><th>Media</th><th>Captured</th><th>Latitude</th><th>Longitude</th></tr></thead>
-            <tbody id="observations-body"></tbody>
-          </table>
-        </div>
-      </details>
-
-      <details>
-        <summary>View generated JSON</summary>
-        <div class="details-body">
-          <div class="json-tabs">
-            <button data-json="trip">trip.json</button>
-            <button data-json="route">route.geojson</button>
-            <button data-json="timeline">timeline.json</button>
-          </div>
-          <pre id="json-view"></pre>
-        </div>
-      </details>
-
-      <details>
-        <summary>Optional downloads</summary>
-        <div class="details-body download-row">
-          <button data-download="trip">Download trip.json</button>
-          <button data-download="route">Download route.geojson</button>
-          <button data-download="timeline">Download timeline.json</button>
-        </div>
-      </details>
-    </div>
-  </section>
+  <section id="result"><div class="card">
+    <div class="result-top"><div class="metrics">
+      <div class="metric"><div class="label">Media</div><div id="m-media" class="value">0</div></div><div class="metric"><div class="label">GPS media</div><div id="m-gps" class="value">0</div></div><div class="metric"><div class="label">Points</div><div id="m-stops" class="value">0</div></div><div class="metric"><div class="label">Segments</div><div id="m-segments" class="value">0</div></div><div class="metric"><div class="label">Route</div><div id="m-route" class="value">0 km</div></div>
+    </div><div id="trip-status" class="muted"></div></div>
+    <div class="map-wrap"><div id="map"></div><div id="map-controls"><button id="replay">Replay route</button><select id="playback-speed" title="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option></select><label class="checkbox-pill"><input id="slow-points" type="checkbox" checked> Slow at image points</label><button id="fit" class="secondary">Fit route</button><button id="render" class="secondary">Export MP4</button><a id="video-download" hidden></a></div><div id="media-overlay"></div></div>
+    <details><summary>Route points</summary><div class="details-body"><table><thead><tr><th>#</th><th>Place</th><th>Media</th><th>Captured</th><th>Latitude</th><th>Longitude</th></tr></thead><tbody id="observations-body"></tbody></table></div></details>
+    <details><summary>View generated JSON</summary><div class="details-body"><div class="json-tabs"><button data-json="trip">trip.json</button><button data-json="route">route.geojson</button><button data-json="timeline">timeline.json</button></div><pre id="json-view"></pre></div></details>
+    <details><summary>Optional downloads</summary><div class="details-body download-row"><button data-download="trip">Download trip.json</button><button data-download="route">Download route.geojson</button><button data-download="timeline">Download timeline.json</button></div></details>
+  </div></section>
 </div>
 
 <script>
-const qs = new URLSearchParams(location.search);
-const renderMode = qs.get("render") === "1";
-if (renderMode) document.body.classList.add("render-only");
+const qs=new URLSearchParams(location.search),renderMode=qs.get("render")==="1";if(renderMode)document.body.classList.add("render-only");
+const els={fileInput:document.getElementById("file-input"),dropZone:document.getElementById("drop-zone"),mediaGrid:document.getElementById("media-grid"),analyze:document.getElementById("analyze"),status:document.getElementById("status"),result:document.getElementById("result"),startPoint:document.getElementById("start-point"),endPoint:document.getElementById("end-point"),returnStart:document.getElementById("return-start"),keepOne:document.getElementById("keep-one"),vehicle:document.getElementById("vehicle"),placeDetail:document.getElementById("place-detail"),mapStyle:document.getElementById("map-style"),replay:document.getElementById("replay"),playbackSpeed:document.getElementById("playback-speed"),slowPoints:document.getElementById("slow-points"),fit:document.getElementById("fit"),render:document.getElementById("render"),videoDownload:document.getElementById("video-download"),observationsBody:document.getElementById("observations-body"),jsonView:document.getElementById("json-view"),mediaOverlay:document.getElementById("media-overlay")};
+const MAX_CONCURRENT_UPLOADS=4;
+const state={sessionId:crypto.randomUUID(),uploads:[],uploadQueue:[],activeUploads:0,current:null,map:null,marker:null,vehicleGlyph:null,markers:[],placeLabels:new Map(),raf:null,routeBounds:null,cumulative:[],totalDistance:0,jsonTab:"trip",placeRequestSeq:0};
+window.tripReady=false;window.tripData=null;window.routeData=null;window.timelineData=null;
+function humanSize(bytes){const units=["B","KB","MB","GB"];let value=bytes,i=0;while(value>=1024&&i<units.length-1){value/=1024;i++}return value.toFixed(1)+" "+units[i]}
+function escapeHtml(value){return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
+function retainedUploads(){return state.uploads.filter(item=>!item.discarded&&item.status==="uploaded")}function pendingUploads(){return state.uploads.some(item=>!item.discarded&&(item.status==="queued"||item.status==="uploading"||item.status==="processing"))}function gpsUploads(){return retainedUploads().filter(item=>item.metadata?.has_gps).sort((a,b)=>(a.metadata.captured_at||"").localeCompare(b.metadata.captured_at||"")||a.file.name.localeCompare(b.file.name))}
+function updateAnalyzeState(){els.analyze.disabled=pendingUploads()||retainedUploads().length===0}function clearResult(){state.current=null;window.tripReady=false;els.result.style.display="none";if(state.map){state.map.remove();state.map=null}hideMediaOverlay()}
+function cardFor(record){return document.querySelector('[data-client-id="'+record.clientId+'"]')}function setProgress(record,percent,text){const card=cardFor(record);if(!card)return;const bar=card.querySelector(".progress>div"),label=card.querySelector(".progress-text");if(bar)bar.style.width=Math.max(0,Math.min(100,percent))+"%";if(label)label.textContent=text}
+function createCard(record){const card=document.createElement("div");card.className="media-card";card.dataset.clientId=record.clientId;const thumb=document.createElement("div");thumb.className="media-thumb";const url=URL.createObjectURL(record.file);record.objectUrl=url;if(record.file.type.startsWith("video/")||/\.(mov|mp4|m4v)$/i.test(record.file.name)){const video=document.createElement("video");video.src=url;video.muted=true;video.playsInline=true;video.preload="metadata";thumb.appendChild(video)}else if(!/\.(heic|heif)$/i.test(record.file.name)){const img=document.createElement("img");img.src=url;img.alt=record.file.name;img.onerror=()=>{thumb.textContent="Preview unavailable"};thumb.appendChild(img)}else thumb.textContent="HEIC preview available after upload";const meta=document.createElement("div");meta.className="media-meta";meta.innerHTML='<div class="filename" title="'+escapeHtml(record.file.name)+'">'+escapeHtml(record.file.name)+'</div><div class="muted">'+humanSize(record.file.size)+'</div><div class="progress"><div></div></div><div class="progress-text">Queued</div><div class="storage-note"></div><div class="media-actions"><button class="danger discard">Discard</button></div>';meta.querySelector(".discard").addEventListener("click",()=>discardUpload(record));card.append(thumb,meta);els.mediaGrid.appendChild(card)}
+function addFiles(fileList){Array.from(fileList).forEach(file=>{const record={clientId:crypto.randomUUID(),file,status:"queued",discarded:false,serverId:null,metadata:null,xhr:null,objectUrl:null,finished:false};state.uploads.push(record);state.uploadQueue.push(record);createCard(record)});els.fileInput.value="";updateAnalyzeState();pumpUploadQueue()}
+function finishUploadSlot(record){if(record.finished)return;record.finished=true;state.activeUploads=Math.max(0,state.activeUploads-1);pumpUploadQueue();updateAnalyzeState()}
+function pumpUploadQueue(){while(state.activeUploads<MAX_CONCURRENT_UPLOADS&&state.uploadQueue.length){const record=state.uploadQueue.shift();if(!record||record.discarded)continue;startUpload(record)}}
+function startUpload(record){
+  state.activeUploads++;
+  record.status="uploading";
+  record.finished=false;
+  setProgress(record,1,"Uploading…");
 
-const els = {
-  fileInput: document.getElementById("file-input"),
-  dropZone: document.getElementById("drop-zone"),
-  mediaGrid: document.getElementById("media-grid"),
-  analyze: document.getElementById("analyze"),
-  status: document.getElementById("status"),
-  result: document.getElementById("result"),
-  vehicle: document.getElementById("vehicle"),
-  placeDetail: document.getElementById("place-detail"),
-  mapStyle: document.getElementById("map-style"),
-  keepOne: document.getElementById("keep-one"),
-  replay: document.getElementById("replay"),
-  fit: document.getElementById("fit"),
-  render: document.getElementById("render"),
-  videoDownload: document.getElementById("video-download"),
-  observationsBody: document.getElementById("observations-body"),
-  jsonView: document.getElementById("json-view"),
-  mediaOverlay: document.getElementById("media-overlay")
-};
+  const form=new FormData();
+  form.append("file",record.file,record.file.name);
 
-const state = {
-  files: [],
-  current: null,
-  map: null,
-  marker: null,
-  markers: [],
-  raf: null,
-  routeBounds: null,
-  cumulative: [],
-  totalDistance: 0,
-  jsonTab: "trip"
-};
+  const xhr=new XMLHttpRequest();
+  record.xhr=xhr;
+  xhr.open("POST","/api/upload-sessions/"+state.sessionId+"/media");
+  xhr.responseType="json";
 
-window.tripReady = false;
-window.tripData = null;
-window.routeData = null;
-window.timelineData = null;
-
-function humanSize(bytes) {
-  const units = ["B","KB","MB","GB"];
-  let value = bytes;
-  let i = 0;
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024;
-    i += 1;
-  }
-  return value.toFixed(1) + " " + units[i];
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;");
-}
-
-function clearObjectUrls() {
-  document.querySelectorAll("[data-object-url]").forEach(el => {
-    URL.revokeObjectURL(el.dataset.objectUrl);
-  });
-}
-
-function setFiles(files) {
-  clearObjectUrls();
-  state.files = Array.from(files);
-  els.analyze.disabled = !state.files.length;
-  els.mediaGrid.innerHTML = "";
-
-  state.files.forEach((file, index) => {
-    const card = document.createElement("div");
-    card.className = "media-card";
-    card.dataset.fileIndex = index;
-
-    const thumb = document.createElement("div");
-    thumb.className = "media-thumb";
-    const url = URL.createObjectURL(file);
-
-    if (file.type.startsWith("video/") || /\.(mov|mp4|m4v)$/i.test(file.name)) {
-      const video = document.createElement("video");
-      video.src = url;
-      video.muted = true;
-      video.playsInline = true;
-      video.preload = "metadata";
-      video.dataset.objectUrl = url;
-      thumb.appendChild(video);
-    } else if (!/\.(heic|heif)$/i.test(file.name)) {
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = file.name;
-      img.dataset.objectUrl = url;
-      img.onerror = () => {
-        thumb.textContent = "Preview unavailable";
-      };
-      thumb.appendChild(img);
-    } else {
-      URL.revokeObjectURL(url);
-      thumb.textContent = "HEIC preview after analysis";
-    }
-
-    const meta = document.createElement("div");
-    meta.className = "media-meta";
-    meta.innerHTML =
-      '<div class="filename" title="' + escapeHtml(file.name) + '">' +
-      escapeHtml(file.name) + '</div>' +
-      '<div class="muted">' + humanSize(file.size) + '</div>' +
-      '<div class="progress"><div id="bar-' + index + '"></div></div>' +
-      '<div class="progress-text" id="progress-' + index + '">Ready to upload</div>';
-
-    card.appendChild(thumb);
-    card.appendChild(meta);
-    els.mediaGrid.appendChild(card);
-  });
-}
-
-els.dropZone.addEventListener("click", () => els.fileInput.click());
-els.fileInput.addEventListener("change", () => setFiles(els.fileInput.files));
-["dragenter","dragover"].forEach(type => {
-  els.dropZone.addEventListener(type, event => {
-    event.preventDefault();
-    els.dropZone.classList.add("dragging");
-  });
-});
-["dragleave","drop"].forEach(type => {
-  els.dropZone.addEventListener(type, event => {
-    event.preventDefault();
-    els.dropZone.classList.remove("dragging");
-  });
-});
-els.dropZone.addEventListener("drop", event => {
-  setFiles(event.dataTransfer.files);
-});
-
-function setFileProgress(index, percent, text) {
-  const bar = document.getElementById("bar-" + index);
-  const label = document.getElementById("progress-" + index);
-  if (bar) bar.style.width = Math.max(0, Math.min(100, percent)) + "%";
-  if (label) label.textContent = text;
-}
-
-function updatePerFileUpload(loaded, total) {
-  const totalFileBytes = state.files.reduce((sum,file) => sum + file.size, 0);
-  const payloadRatio = total > 0 ? Math.min(1, loaded / total) : 0;
-  let estimatedFileBytes = payloadRatio * totalFileBytes;
-
-  state.files.forEach((file,index) => {
-    const bytesForFile = Math.max(0, Math.min(file.size, estimatedFileBytes));
-    const percent = file.size ? (bytesForFile / file.size) * 100 : 100;
-    setFileProgress(index, percent, Math.round(percent) + "% uploaded");
-    estimatedFileBytes -= file.size;
-  });
-}
-
-function analyze() {
-  if (!state.files.length) return;
-
-  els.analyze.disabled = true;
-  els.status.className = "";
-  els.status.textContent = "Uploading media…";
-
-  state.files.forEach((_,i) => setFileProgress(i,0,"Queued"));
-
-  const form = new FormData();
-  state.files.forEach(file => form.append("files", file, file.name));
-  form.append("keep_as_one_trip", els.keepOne.checked ? "true" : "false");
-  form.append("place_granularity", els.placeDetail.value);
-
-  const xhr = new XMLHttpRequest();
-  xhr.open("POST", "/api/trips/analyze");
-  xhr.responseType = "json";
-
-  xhr.upload.onprogress = event => {
-    if (event.lengthComputable) {
-      updatePerFileUpload(event.loaded, event.total);
+  xhr.upload.onprogress=event=>{
+    if(event.lengthComputable){
+      const percent=event.loaded/event.total*100;
+      setProgress(record,percent,Math.round(percent)+"% uploaded");
     }
   };
 
-  xhr.onload = () => {
-    els.analyze.disabled = false;
-    const payload = xhr.response || {};
-    if (xhr.status < 200 || xhr.status >= 300) {
-      els.status.className = "error";
-      els.status.textContent = payload.detail || "Analysis failed";
-      return;
-    }
-
-    state.files.forEach((_,i) => setFileProgress(i,100,"Uploaded"));
-    els.status.className = "ok";
-    els.status.textContent = "Route ready.";
-
-    if (payload.trips?.length) {
-      renderTrip(payload.trips[0]);
+  xhr.upload.onload=()=>{
+    if(!record.discarded){
+      record.status="processing";
+      setProgress(record,100,"Extracting metadata + optimizing image…");
     }
   };
 
-  xhr.onerror = () => {
-    els.analyze.disabled = false;
-    els.status.className = "error";
-    els.status.textContent = "Upload failed.";
+  xhr.onload=()=>{
+    try{
+      if(record.discarded)return;
+      const payload=xhr.response||{};
+      if(xhr.status<200||xhr.status>=300){
+        record.status="failed";
+        setProgress(record,0,payload.detail||"Upload failed");
+        return;
+      }
+
+      record.status="uploaded";
+      record.serverId=payload.id;
+      record.metadata=payload;
+      setProgress(record,100,payload.has_gps?"Uploaded · GPS ready":"Uploaded · no GPS");
+
+      const card=cardFor(record);
+      if(card){
+        const note=card.querySelector(".storage-note");
+        if(note){
+          note.textContent=payload.compressed
+            ? "Stored "+humanSize(payload.stored_bytes)+" after metadata extraction (from "+humanSize(payload.original_bytes)+")"
+            : "Stored "+humanSize(payload.stored_bytes);
+        }
+
+        if(/\.(heic|heif)$/i.test(record.file.name)){
+          const thumb=card.querySelector(".media-thumb");
+          thumb.innerHTML="";
+          const img=document.createElement("img");
+          img.src=payload.preview_url;
+          img.alt=record.file.name;
+          thumb.appendChild(img);
+        }
+      }
+      refreshPointSelectors();
+    } finally {
+      finishUploadSlot(record);
+    }
   };
 
+  xhr.onerror=()=>{
+    if(!record.discarded){
+      record.status="failed";
+      setProgress(record,0,"Upload failed");
+    }
+    finishUploadSlot(record);
+  };
+
+  xhr.onabort=()=>finishUploadSlot(record);
   xhr.send(form);
 }
-els.analyze.addEventListener("click", analyze);
-
-const SATELLITE_TILES =
-  "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";
-
-function satelliteStyle() {
-  return {
-    version: 8,
-    sources: {
-      satellite: {
-        type: "raster",
-        tiles: [SATELLITE_TILES],
-        tileSize: 256,
-        attribution: "EOX Sentinel-2 cloudless"
-      }
-    },
-    layers: [{
-      id: "satellite",
-      type: "raster",
-      source: "satellite"
-    }]
-  };
-}
-
-function segmentDistance(a,b) {
-  const toRad = value => value * Math.PI / 180;
-  const lat1 = toRad(a[1]);
-  const lat2 = toRad(b[1]);
-  const dLat = toRad(b[1]-a[1]);
-  const dLon = toRad(b[0]-a[0]);
-  const h =
-    Math.sin(dLat/2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) ** 2;
-  return 6371008.8 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
-}
-
-function routeCoordinates(data) {
-  if (data.route?.geometry?.coordinates?.length) {
-    return data.route.geometry.coordinates;
-  }
-  return data.observations.map(o => [o.longitude,o.latitude]);
-}
-
-function setupDistance(coords) {
-  state.cumulative = [0];
-  for (let i=1;i<coords.length;i++) {
-    state.cumulative.push(
-      state.cumulative[i-1] + segmentDistance(coords[i-1],coords[i])
-    );
-  }
-  state.totalDistance = state.cumulative.at(-1) || 0;
-}
-
-function positionAt(coords, progress) {
-  if (!coords.length) return null;
-  if (coords.length === 1) return {point:coords[0],index:0};
-
-  const target = Math.max(0,Math.min(1,progress)) * state.totalDistance;
-  let index = 0;
-  while (
-    index < state.cumulative.length - 2 &&
-    state.cumulative[index+1] < target
-  ) index += 1;
-
-  const a = coords[index];
-  const b = coords[index+1];
-  const start = state.cumulative[index];
-  const end = state.cumulative[index+1];
-  const length = Math.max(end-start,0.000001);
-  const t = Math.max(0,Math.min(1,(target-start)/length));
-  return {
-    point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],
-    index
-  };
-}
-
-function setRouteProgress(progress) {
-  const data = state.current;
-  if (!data || !state.marker || !state.map) return;
-  const coords = routeCoordinates(data);
-  const result = positionAt(coords,progress);
-  if (!result) return;
-
-  state.marker.setLngLat(result.point);
-  const traveled = coords.slice(0,result.index+1).concat([result.point]);
-  state.map.getSource("traveled")?.setData({
-    type:"Feature",
-    properties:{},
-    geometry:{type:"LineString",coordinates:traveled}
-  });
-}
-
-function paddedBounds(bounds) {
-  const west=bounds.getWest(), east=bounds.getEast();
-  const south=bounds.getSouth(), north=bounds.getNorth();
-  const lonPad=Math.max((east-west)*.35,.01);
-  const latPad=Math.max((north-south)*.35,.01);
-  return [[west-lonPad,south-latPad],[east+lonPad,north+latPad]];
-}
-
-function fitRoute(duration=0) {
-  if (!state.map || !state.routeBounds) return;
-  state.map.resize();
-  state.map.fitBounds(state.routeBounds,{
-    padding:{top:90,right:90,bottom:110,left:90},
-    duration
-  });
-}
-
-function clearMap() {
-  if (state.raf) cancelAnimationFrame(state.raf);
-  state.markers.forEach(marker => marker.remove());
-  state.markers = [];
-  state.marker = null;
-  if (state.map) {
-    state.map.remove();
-    state.map = null;
-  }
-}
-
-function drawMap(data) {
-  clearMap();
-  const coords = routeCoordinates(data);
-  setupDistance(coords);
-
-  const styleName = renderMode ? "Street" : els.mapStyle.value;
-  state.map = new maplibregl.Map({
-    container:"map",
-    style:styleName === "Satellite"
-      ? satelliteStyle()
-      : "https://tiles.openfreemap.org/styles/liberty",
-    center:coords[0] || [85.324,27.676],
-    zoom:coords.length ? 8 : 6,
-    attributionControl:true,
-    dragPan:true,
-    dragRotate:false,
-    keyboard:true,
-    boxZoom:true,
-    scrollZoom:true,
-    touchPitch:false,
-    pitchWithRotate:false
-  });
-
-  state.map.touchZoomRotate.enable();
-  state.map.touchZoomRotate.disableRotation();
-  if (!renderMode) {
-    state.map.addControl(
-      new maplibregl.NavigationControl({
-        showCompass:false,
-        visualizePitch:false
-      }),
-      "top-right"
-    );
-  }
-
-  state.map.on("load", () => {
-    if (styleName === "Hybrid") {
-      state.map.addSource("satellite-underlay",{
-        type:"raster",
-        tiles:[SATELLITE_TILES],
-        tileSize:256,
-        attribution:"EOX Sentinel-2 cloudless"
-      });
-      const firstLine = state.map.getStyle().layers.find(
-        layer => layer.type !== "fill" && layer.type !== "background"
-      );
-      state.map.addLayer({
-        id:"satellite-underlay",
-        type:"raster",
-        source:"satellite-underlay"
-      }, firstLine?.id);
-    }
-
-    const routeFeature = data.route || {
-      type:"Feature",
-      properties:{inferred:false},
-      geometry:{type:"LineString",coordinates:coords}
-    };
-
-    state.map.addSource("route",{type:"geojson",data:routeFeature});
-    state.map.addLayer({
-      id:"route",type:"line",source:"route",
-      paint:{
-        "line-color":"#6b7280",
-        "line-width":5,
-        "line-opacity":.5
-      }
-    });
-
-    state.map.addSource("traveled",{
-      type:"geojson",
-      data:{
-        type:"Feature",properties:{},
-        geometry:{type:"LineString",coordinates:[]}
-      }
-    });
-    state.map.addLayer({
-      id:"traveled",type:"line",source:"traveled",
-      paint:{"line-color":"#111827","line-width":7}
-    });
-
-    data.observations.forEach(obs => {
-      const wrap=document.createElement("div");
-      wrap.className="observation-wrap";
-      const dot=document.createElement("div");
-      dot.className="observation-dot";
-      const label=document.createElement("div");
-      label.className="place-label";
-      label.textContent=obs.place;
-      wrap.append(dot,label);
-      const marker=new maplibregl.Marker({element:wrap,anchor:"left"})
-        .setLngLat([obs.longitude,obs.latitude])
-        .addTo(state.map);
-      state.markers.push(marker);
-    });
-
-    if (coords.length) {
-      const markerEl=document.createElement("div");
-      markerEl.className="vehicle-marker";
-      const glyph=document.createElement("span");
-      glyph.className="vehicle-glyph";
-      glyph.textContent=renderMode ? "🛵" : els.vehicle.value;
-      markerEl.appendChild(glyph);
-      state.marker=new maplibregl.Marker({
-        element:markerEl,
-        anchor:"center",
-        rotationAlignment:"viewport",
-        pitchAlignment:"viewport"
-      }).setLngLat(coords[0]).addTo(state.map);
-      state.markers.push(state.marker);
-    }
-
-    if (coords.length > 1) {
-      state.routeBounds=coords.reduce(
-        (bounds,c)=>bounds.extend(c),
-        new maplibregl.LngLatBounds(coords[0],coords[0])
-      );
-      state.map.setMaxBounds(paddedBounds(state.routeBounds));
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        fitRoute(0);
-        const fittedZoom=state.map.getZoom();
-        state.map.setMinZoom(Math.max(2,fittedZoom-1.5));
-      }));
-    } else if (coords.length === 1) {
-      state.routeBounds=new maplibregl.LngLatBounds(coords[0],coords[0]);
-      state.map.setCenter(coords[0]);
-      state.map.setZoom(14);
-      state.map.setMinZoom(11);
-    }
-
-    if (renderMode) {
-      window.tripReady=true;
-    } else {
-      replayRoute();
-    }
-  });
-}
-
-function easeInOut(t) {
-  return t < .5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
-}
-
-function routeStops() {
-  const values=(state.current?.observations || [])
-    .map(o=>Number(o.progress))
-    .filter(Number.isFinite)
-    .map(v=>Math.max(0,Math.min(1,v)))
-    .sort((a,b)=>a-b);
-
-  const unique=[];
-  for (const value of values) {
-    if (!unique.length || Math.abs(value-unique.at(-1))>.003) unique.push(value);
-  }
-  if (!unique.length || unique[0]>.001) unique.unshift(0);
-  if (unique.at(-1)<.999) unique.push(1);
-  return unique;
-}
-
-function replayRoute() {
-  if (!state.current || routeCoordinates(state.current).length < 2) return;
-  if (state.raf) cancelAnimationFrame(state.raf);
-
-  const stops=routeStops();
-  const phases=[];
-  const travelMs=14000;
-  const pauseMs=1800;
-  for (let i=0;i<stops.length-1;i++) {
-    const from=stops[i],to=stops[i+1];
-    phases.push({
-      type:"move",from,to,
-      duration:Math.max(700,travelMs*Math.max(to-from,.035))
-    });
-    if (i+1<stops.length-1) {
-      phases.push({type:"pause",at:to,duration:pauseMs});
-    }
-  }
-
-  const total=phases.reduce((sum,p)=>sum+p.duration,0);
-  const started=performance.now();
-
-  function frame(now) {
-    let remaining=Math.min(total,now-started);
-    let progress=0;
-    for (const phase of phases) {
-      if (remaining>phase.duration) {
-        remaining-=phase.duration;
-        progress=phase.type==="move"?phase.to:phase.at;
-        continue;
-      }
-      if (phase.type==="pause") {
-        progress=phase.at;
-      } else {
-        const t=Math.max(0,Math.min(1,remaining/phase.duration));
-        progress=phase.from+(phase.to-phase.from)*easeInOut(t);
-      }
-      break;
-    }
-    setRouteProgress(progress);
-    if (now-started<total) state.raf=requestAnimationFrame(frame);
-  }
-  state.raf=requestAnimationFrame(frame);
-}
-
-function hideMediaOverlay() {
-  els.mediaOverlay.style.display="none";
-  els.mediaOverlay.innerHTML="";
-  delete els.mediaOverlay.dataset.mediaId;
-}
-
-function showTimelineMedia(media) {
-  hideMediaOverlay();
-  if (!media) return;
-  if (media.media_type === "video") {
-    const video=document.createElement("video");
-    video.src=media.url;
-    video.muted=true;
-    video.playsInline=true;
-    video.preload="auto";
-    els.mediaOverlay.appendChild(video);
-  } else {
-    const img=document.createElement("img");
-    img.src=media.preview_url;
-    img.alt=media.filename;
-    els.mediaOverlay.appendChild(img);
-  }
-  els.mediaOverlay.dataset.mediaId=media.id;
-  els.mediaOverlay.style.display="block";
-}
-
-window.setTripTime = async function(seconds) {
-  const data=state.current;
-  if (!data?.timeline) return;
-
-  const duration=Math.max(data.timeline.duration_seconds,.001);
-  const time=Math.max(0,Math.min(duration,seconds));
-  setRouteProgress(time/duration);
-
-  let visible=null;
-  for (const event of data.timeline.events) {
-    if (event.video_time>time) break;
-    if (event.type==="media_show") visible=event;
-    if (
-      event.type==="media_hide" &&
-      visible?.payload?.media_id===event.payload?.media_id
-    ) visible=null;
-  }
-
-  if (!visible) {
-    hideMediaOverlay();
-    return;
-  }
-
-  const media=data.trip.media.find(
-    item=>item.id===visible.payload.media_id
-  );
-  if (!media) return;
-  if (els.mediaOverlay.dataset.mediaId!==media.id) showTimelineMedia(media);
-};
-
-function renderObservations(data) {
-  els.observationsBody.innerHTML=data.observations.map(obs=>
-    "<tr>" +
-      "<td>"+obs.order+"</td>" +
-      "<td>"+escapeHtml(obs.place)+"</td>" +
-      "<td>"+escapeHtml(obs.media_files.join(", "))+"</td>" +
-      "<td>"+escapeHtml(obs.arrival)+"</td>" +
-      "<td>"+obs.latitude.toFixed(6)+"</td>" +
-      "<td>"+obs.longitude.toFixed(6)+"</td>" +
-    "</tr>"
-  ).join("");
-}
-
-function currentJson() {
-  if (!state.current) return null;
-  return state.current[state.jsonTab];
-}
-
-function showJson(tab) {
-  state.jsonTab=tab;
-  els.jsonView.textContent=JSON.stringify(currentJson(),null,2);
-}
-document.querySelectorAll("[data-json]").forEach(button=>{
-  button.addEventListener("click",()=>showJson(button.dataset.json));
-});
-
-function downloadJson(kind) {
-  if (!state.current) return;
-  const data=state.current[kind];
-  if (data == null) return;
-  const names={
-    trip:"trip.json",
-    route:"route.geojson",
-    timeline:"timeline.json"
-  };
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;
-  a.download=names[kind];
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
-document.querySelectorAll("[data-download]").forEach(button=>{
-  button.addEventListener("click",()=>downloadJson(button.dataset.download));
-});
-
-function renderTrip(data) {
-  state.current=data;
-  window.tripData=data.trip;
-  window.routeData=data.route;
-  window.timelineData=data.timeline;
-
-  document.getElementById("m-media").textContent=data.summary.media_count;
-  document.getElementById("m-gps").textContent=data.summary.gps_media_count;
-  document.getElementById("m-stops").textContent=data.summary.stop_count;
-  document.getElementById("m-segments").textContent=data.summary.segment_count;
-  document.getElementById("m-route").textContent=
-    (data.summary.distance_meters/1000).toFixed(1)+" km";
-
-  const routing=data.route ? "OSRM road routing" : "straight GPS fallback";
-  document.getElementById("trip-status").textContent=
-    data.summary.gps_media_count+" geotagged media · "+
-    data.summary.stop_count+" stops · "+routing;
-
-  renderObservations(data);
-  showJson("trip");
-  els.result.style.display="block";
-  drawMap(data);
-  if (!renderMode) els.result.scrollIntoView({behavior:"smooth",block:"start"});
-}
-
-els.replay.addEventListener("click",replayRoute);
-els.fit.addEventListener("click",()=>fitRoute(350));
-els.mapStyle.addEventListener("change",()=>state.current&&drawMap(state.current));
-els.vehicle.addEventListener("change",()=>state.current&&drawMap(state.current));
-
-async function startRender() {
-  if (!state.current) return;
-  els.render.disabled=true;
-  els.status.textContent="Starting MP4 render…";
-  const response=await fetch("/api/trips/"+state.current.id+"/render",{method:"POST"});
-  const job=await response.json();
-  if (!response.ok) {
-    els.render.disabled=false;
-    els.status.textContent=job.detail || "Render failed to start";
-    return;
-  }
-
-  for (;;) {
-    await new Promise(resolve=>setTimeout(resolve,2000));
-    const statusResponse=await fetch("/api/renders/"+job.id);
-    const status=await statusResponse.json();
-    els.status.textContent="Render: "+status.status;
-
-    if (status.status==="complete") {
-      els.render.disabled=false;
-      els.videoDownload.href="/api/renders/"+job.id+"/video";
-      els.videoDownload.download="trip-recap.mp4";
-      els.videoDownload.textContent="Download MP4";
-      els.videoDownload.hidden=false;
-      return;
-    }
-    if (status.status==="failed") {
-      els.render.disabled=false;
-      els.status.textContent="Render failed: "+(status.error || "unknown error");
-      return;
-    }
-  }
-}
-els.render.addEventListener("click",startRender);
-
-async function loadExistingTrip(tripId) {
-  const response=await fetch("/api/trips/"+tripId+"/data");
-  if (!response.ok) return;
-  renderTrip(await response.json());
-}
-
-if (qs.get("trip_id")) {
-  loadExistingTrip(qs.get("trip_id"));
-}
+async function discardUpload(record){record.discarded=true;state.uploadQueue=state.uploadQueue.filter(item=>item!==record);if(record.xhr&&(record.status==="uploading"||record.status==="processing"))record.xhr.abort();if(record.serverId){try{await fetch("/api/upload-sessions/"+state.sessionId+"/media/"+record.serverId,{method:"DELETE"})}catch{}}if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);cardFor(record)?.remove();state.uploads=state.uploads.filter(item=>item!==record);refreshPointSelectors();updateAnalyzeState();clearResult();els.status.className="";els.status.textContent="Media discarded. It will not be used for the route."}
+function refreshPointSelectors(){const points=gpsUploads(),startValue=els.startPoint.value,endValue=els.endPoint.value;els.startPoint.innerHTML='<option value="">Auto · first GPS point</option>';els.endPoint.innerHTML='<option value="">Auto · last GPS point</option>';points.forEach(item=>{const when=item.metadata.captured_at?" · "+new Date(item.metadata.captured_at).toLocaleString():"",label=item.file.name+when;els.startPoint.add(new Option(label,item.serverId));els.endPoint.add(new Option(label,item.serverId))});if(points.some(item=>item.serverId===startValue))els.startPoint.value=startValue;if(points.some(item=>item.serverId===endValue))els.endPoint.value=endValue;els.endPoint.disabled=els.returnStart.checked}
+els.dropZone.addEventListener("click",()=>els.fileInput.click());els.fileInput.addEventListener("change",()=>addFiles(els.fileInput.files));["dragenter","dragover"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.add("dragging")}));["dragleave","drop"].forEach(type=>els.dropZone.addEventListener(type,event=>{event.preventDefault();els.dropZone.classList.remove("dragging")}));els.dropZone.addEventListener("drop",event=>addFiles(event.dataTransfer.files));els.returnStart.addEventListener("change",refreshPointSelectors);
+async function analyze(){const uploads=retainedUploads();if(!uploads.length||pendingUploads())return;els.analyze.disabled=true;els.status.className="";els.status.textContent="Tracing route from retained media…";const payload={session_id:state.sessionId,upload_ids:uploads.map(item=>item.serverId),keep_as_one_trip:els.keepOne.checked,start_media_id:els.startPoint.value||null,end_media_id:els.returnStart.checked?null:(els.endPoint.value||null),return_to_start:els.returnStart.checked};try{const response=await fetch("/api/trips/analyze-session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),data=await response.json();if(!response.ok)throw new Error(data.detail||"Route analysis failed");els.status.className="ok";els.status.textContent="Route ready. Map style and place-name detail can change without retracing.";if(data.trips?.length){renderTrip(data.trips[0]);refreshPlaceLabels()}}catch(error){els.status.className="error";els.status.textContent=error.message}finally{updateAnalyzeState()}}els.analyze.addEventListener("click",analyze);
+const SATELLITE_TILES="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";function satelliteStyle(){return{version:8,sources:{satellite:{type:"raster",tiles:[SATELLITE_TILES],tileSize:256,attribution:"EOX Sentinel-2 cloudless"}},layers:[{id:"satellite",type:"raster",source:"satellite"}]}}
+function segmentDistance(a,b){const toRad=value=>value*Math.PI/180,lat1=toRad(a[1]),lat2=toRad(b[1]),dLat=toRad(b[1]-a[1]),dLon=toRad(b[0]-a[0]),h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))}function routeCoordinates(data){if(data.route?.geometry?.coordinates?.length)return data.route.geometry.coordinates;return data.observations.map(o=>[o.longitude,o.latitude])}function setupDistance(coords){state.cumulative=[0];for(let i=1;i<coords.length;i++)state.cumulative.push(state.cumulative[i-1]+segmentDistance(coords[i-1],coords[i]));state.totalDistance=state.cumulative.at(-1)||0}function positionAt(coords,progress){if(!coords.length)return null;if(coords.length===1)return{point:coords[0],index:0};const target=Math.max(0,Math.min(1,progress))*state.totalDistance;let index=0;while(index<state.cumulative.length-2&&state.cumulative[index+1]<target)index++;const a=coords[index],b=coords[index+1],start=state.cumulative[index],end=state.cumulative[index+1],length=Math.max(end-start,.000001),t=Math.max(0,Math.min(1,(target-start)/length));return{point:[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t],index}}
+function setRouteProgress(progress){const data=state.current;if(!data||!state.marker||!state.map)return;const coords=routeCoordinates(data),result=positionAt(coords,progress);if(!result)return;state.marker.setLngLat(result.point);const nextIndex=Math.min(result.index+1,coords.length-1),a=coords[result.index],b=coords[nextIndex];if(state.vehicleGlyph&&a&&b&&state.map){const pa=state.map.project(a),pb=state.map.project(b);if(Math.abs(pb.x-pa.x)>.25)state.vehicleGlyph.style.setProperty("--direction",pb.x>=pa.x?1:-1)}const traveled=coords.slice(0,result.index+1).concat([result.point]);state.map.getSource("traveled")?.setData({type:"Feature",properties:{},geometry:{type:"LineString",coordinates:traveled}})}
+function paddedBounds(bounds){const west=bounds.getWest(),east=bounds.getEast(),south=bounds.getSouth(),north=bounds.getNorth(),lonPad=Math.max((east-west)*.35,.01),latPad=Math.max((north-south)*.35,.01);return[[west-lonPad,south-latPad],[east+lonPad,north+latPad]]}function fitRoute(duration=0){if(!state.map||!state.routeBounds)return;state.map.resize();state.map.fitBounds(state.routeBounds,{padding:{top:90,right:90,bottom:110,left:90},duration})}function clearMap(){if(state.raf)cancelAnimationFrame(state.raf);state.markers.forEach(marker=>marker.remove());state.markers=[];state.placeLabels.clear();state.marker=null;state.vehicleGlyph=null;if(state.map){state.map.remove();state.map=null}}
+function drawMap(data,{fit=true}={}){clearMap();const coords=routeCoordinates(data);setupDistance(coords);const styleName=renderMode?"Street":els.mapStyle.value;state.map=new maplibregl.Map({container:"map",style:styleName==="Satellite"?satelliteStyle():"https://tiles.openfreemap.org/styles/liberty",center:coords[0]||[85.324,27.676],zoom:coords.length?8:6,attributionControl:true,dragPan:true,dragRotate:false,keyboard:true,boxZoom:true,scrollZoom:true,touchPitch:false,pitchWithRotate:false});state.map.touchZoomRotate.enable();state.map.touchZoomRotate.disableRotation();if(!renderMode)state.map.addControl(new maplibregl.NavigationControl({showCompass:false,visualizePitch:false}),"top-right");state.map.on("load",()=>{if(styleName==="Hybrid"){state.map.addSource("satellite-underlay",{type:"raster",tiles:[SATELLITE_TILES],tileSize:256,attribution:"EOX Sentinel-2 cloudless"});const firstOverlay=state.map.getStyle().layers.find(layer=>layer.type!=="fill"&&layer.type!=="background");state.map.addLayer({id:"satellite-underlay",type:"raster",source:"satellite-underlay"},firstOverlay?.id)}const routeFeature=data.route||{type:"Feature",properties:{inferred:false},geometry:{type:"LineString",coordinates:coords}};state.map.addSource("route",{type:"geojson",data:routeFeature});state.map.addLayer({id:"route",type:"line",source:"route",paint:{"line-color":"#6b7280","line-width":5,"line-opacity":.5}});state.map.addSource("traveled",{type:"geojson",data:{type:"Feature",properties:{},geometry:{type:"LineString",coordinates:[]}}});state.map.addLayer({id:"traveled",type:"line",source:"traveled",paint:{"line-color":"#111827","line-width":7}});data.observations.forEach(obs=>{const wrap=document.createElement("div"),dot=document.createElement("div"),label=document.createElement("div");wrap.className="observation-wrap";dot.className="observation-dot";label.className="place-label";label.textContent=obs.place||"Loading…";wrap.append(dot,label);state.placeLabels.set(obs.id,label);const marker=new maplibregl.Marker({element:wrap,anchor:"left"}).setLngLat([obs.longitude,obs.latitude]).addTo(state.map);state.markers.push(marker)});if(coords.length){const markerEl=document.createElement("div"),glyph=document.createElement("span");markerEl.className="vehicle-marker";glyph.className="vehicle-glyph";glyph.textContent=renderMode?"🛵":els.vehicle.value;markerEl.appendChild(glyph);state.vehicleGlyph=glyph;state.marker=new maplibregl.Marker({element:markerEl,anchor:"center",rotationAlignment:"viewport",pitchAlignment:"viewport"}).setLngLat(coords[0]).addTo(state.map);state.markers.push(state.marker)}if(coords.length>1){state.routeBounds=coords.reduce((bounds,c)=>bounds.extend(c),new maplibregl.LngLatBounds(coords[0],coords[0]));state.map.setMaxBounds(paddedBounds(state.routeBounds));requestAnimationFrame(()=>requestAnimationFrame(()=>{if(fit)fitRoute(0);const fittedZoom=state.map.getZoom();state.map.setMinZoom(Math.max(2,fittedZoom-1.5))}))}else if(coords.length===1){state.routeBounds=new maplibregl.LngLatBounds(coords[0],coords[0]);state.map.setCenter(coords[0]);state.map.setZoom(14);state.map.setMinZoom(11)}if(renderMode)window.tripReady=true;else replayRoute()})}
+function easeInOut(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2}function routeStops(){const values=(state.current?.observations||[]).map(o=>Number(o.progress)).filter(Number.isFinite).map(v=>Math.max(0,Math.min(1,v))).sort((a,b)=>a-b),unique=[];for(const value of values){if(!unique.length||Math.abs(value-unique.at(-1))>.003)unique.push(value)}if(!unique.length||unique[0]>.001)unique.unshift(0);if(unique.at(-1)<.999)unique.push(1);return unique}
+function replayRoute(){if(!state.current||routeCoordinates(state.current).length<2)return;if(state.raf)cancelAnimationFrame(state.raf);const stops=routeStops(),phases=[],speed=Math.max(.25,Number(els.playbackSpeed.value)||1),slowAtPoints=els.slowPoints.checked,travelMs=14000/speed,pointDelay=(slowAtPoints?650:0)/speed;for(let i=0;i<stops.length-1;i++){const from=stops[i],to=stops[i+1];phases.push({type:"move",from,to,duration:Math.max(350,travelMs*Math.max(to-from,.035))});if(pointDelay&&i+1<stops.length-1)phases.push({type:"slow",at:to,duration:pointDelay})}const total=phases.reduce((sum,p)=>sum+p.duration,0),started=performance.now();function frame(now){let remaining=Math.min(total,now-started),progress=0;for(const phase of phases){if(remaining>phase.duration){remaining-=phase.duration;progress=phase.type==="move"?phase.to:phase.at;continue}if(phase.type==="slow")progress=phase.at;else{const raw=Math.max(0,Math.min(1,remaining/phase.duration)),t=slowAtPoints?easeInOut(raw):raw;progress=phase.from+(phase.to-phase.from)*t}break}setRouteProgress(progress);if(now-started<total)state.raf=requestAnimationFrame(frame)}state.raf=requestAnimationFrame(frame)}
+function hideMediaOverlay(){els.mediaOverlay.style.display="none";els.mediaOverlay.innerHTML="";delete els.mediaOverlay.dataset.mediaId}function showTimelineMedia(media){hideMediaOverlay();if(!media)return;if(media.media_type==="video"){const video=document.createElement("video");video.src=media.url;video.muted=true;video.playsInline=true;video.preload="auto";els.mediaOverlay.appendChild(video)}else{const img=document.createElement("img");img.src=media.preview_url;img.alt=media.filename;els.mediaOverlay.appendChild(img)}els.mediaOverlay.dataset.mediaId=media.id;els.mediaOverlay.style.display="block"}
+window.setTripTime=async function(seconds){const data=state.current;if(!data?.timeline)return;const duration=Math.max(data.timeline.duration_seconds,.001),time=Math.max(0,Math.min(duration,seconds));setRouteProgress(time/duration);let visible=null;for(const event of data.timeline.events){if(event.video_time>time)break;if(event.type==="media_show")visible=event;if(event.type==="media_hide"&&visible?.payload?.media_id===event.payload?.media_id)visible=null}if(!visible){hideMediaOverlay();return}const media=data.trip.media.find(item=>item.id===visible.payload.media_id);if(!media)return;if(els.mediaOverlay.dataset.mediaId!==media.id)showTimelineMedia(media)};
+function renderObservations(data){els.observationsBody.innerHTML=data.observations.map(obs=>"<tr><td>"+obs.order+"</td><td>"+escapeHtml(obs.place)+"</td><td>"+escapeHtml(obs.media_files.join(", "))+"</td><td>"+escapeHtml(obs.arrival)+"</td><td>"+obs.latitude.toFixed(6)+"</td><td>"+obs.longitude.toFixed(6)+"</td></tr>").join("")}
+async function refreshPlaceLabels(){if(!state.current)return;const seq=++state.placeRequestSeq,tripId=state.current.id,granularity=els.placeDetail.value;try{const response=await fetch("/api/trips/"+tripId+"/places?granularity="+encodeURIComponent(granularity)),payload=await response.json();if(!response.ok||seq!==state.placeRequestSeq||state.current?.id!==tripId)return;state.current.place_names=payload.places;state.current.observations.forEach(obs=>{obs.place=payload.places[obs.id]||"Unknown place";const label=state.placeLabels.get(obs.id);if(label)label.textContent=obs.place});renderObservations(state.current)}catch{}}
+function currentJson(){if(!state.current)return null;return state.current[state.jsonTab]}function showJson(tab){state.jsonTab=tab;els.jsonView.textContent=JSON.stringify(currentJson(),null,2)}document.querySelectorAll("[data-json]").forEach(button=>button.addEventListener("click",()=>showJson(button.dataset.json)));function downloadJson(kind){if(!state.current)return;const data=state.current[kind];if(data==null)return;const names={trip:"trip.json",route:"route.geojson",timeline:"timeline.json"},blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=names[kind];a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}document.querySelectorAll("[data-download]").forEach(button=>button.addEventListener("click",()=>downloadJson(button.dataset.download)));
+function renderTrip(data){state.current=data;window.tripData=data.trip;window.routeData=data.route;window.timelineData=data.timeline;document.getElementById("m-media").textContent=data.summary.media_count;document.getElementById("m-gps").textContent=data.summary.gps_media_count;document.getElementById("m-stops").textContent=data.summary.stop_count;document.getElementById("m-segments").textContent=data.summary.segment_count;document.getElementById("m-route").textContent=(data.summary.distance_meters/1000).toFixed(1)+" km";document.getElementById("trip-status").textContent=data.summary.gps_media_count+" geotagged media · "+data.summary.stop_count+" image-derived points · "+(data.route?"OSRM road routing":"straight GPS fallback");renderObservations(data);showJson("trip");els.result.style.display="block";drawMap(data);if(!renderMode)els.result.scrollIntoView({behavior:"smooth",block:"start"})}
+els.replay.addEventListener("click",replayRoute);els.fit.addEventListener("click",()=>fitRoute(350));els.playbackSpeed.addEventListener("change",()=>state.current&&replayRoute());els.slowPoints.addEventListener("change",()=>state.current&&replayRoute());els.mapStyle.addEventListener("change",()=>{if(state.current)drawMap(state.current,{fit:false})});els.vehicle.addEventListener("change",()=>{if(state.vehicleGlyph)state.vehicleGlyph.textContent=els.vehicle.value});els.placeDetail.addEventListener("change",()=>refreshPlaceLabels());
+async function startRender(){if(!state.current)return;els.render.disabled=true;els.status.textContent="Starting MP4 render…";const response=await fetch("/api/trips/"+state.current.id+"/render",{method:"POST"}),job=await response.json();if(!response.ok){els.render.disabled=false;els.status.textContent=job.detail||"Render failed to start";return}for(;;){await new Promise(resolve=>setTimeout(resolve,2000));const statusResponse=await fetch("/api/renders/"+job.id),status=await statusResponse.json();els.status.textContent="Render: "+status.status;if(status.status==="complete"){els.render.disabled=false;els.videoDownload.href="/api/renders/"+job.id+"/video";els.videoDownload.download="trip-recap.mp4";els.videoDownload.textContent="Download MP4";els.videoDownload.hidden=false;return}if(status.status==="failed"){els.render.disabled=false;els.status.textContent="Render failed: "+(status.error||"unknown error");return}}}els.render.addEventListener("click",startRender);
+async function loadExistingTrip(tripId){const response=await fetch("/api/trips/"+tripId+"/data");if(!response.ok)return;renderTrip(await response.json());refreshPlaceLabels()}if(qs.get("trip_id"))loadExistingTrip(qs.get("trip_id"));
 </script>
 </body>
 </html>

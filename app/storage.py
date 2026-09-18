@@ -70,7 +70,7 @@ class TripStore:
                 / f"{item.id}{item.path.suffix.lower()}"
             )
             if item.path.resolve() != target.resolve():
-                shutil.move(
+                shutil.copy2(
                     str(item.path),
                     target,
                 )
@@ -108,8 +108,13 @@ class TripStore:
         self,
         trip_id: str,
         places: dict[str, str],
+        granularity: str = "neighborhood",
     ) -> None:
-        (self.trip_dir(trip_id) / "places.json").write_text(
+        path = (
+            self.trip_dir(trip_id)
+            / f"places-{granularity}.json"
+        )
+        path.write_text(
             json.dumps(
                 places,
                 ensure_ascii=False,
@@ -176,13 +181,23 @@ class TripStore:
     def load_places(
         self,
         trip_id: str,
+        granularity: str = "neighborhood",
     ) -> dict[str, str]:
         path = (
             self.root
             / "trips"
             / trip_id
-            / "places.json"
+            / f"places-{granularity}.json"
         )
+        if not path.exists() and granularity == "neighborhood":
+            legacy = (
+                self.root
+                / "trips"
+                / trip_id
+                / "places.json"
+            )
+            if legacy.exists():
+                path = legacy
         if not path.exists():
             return {}
         return json.loads(

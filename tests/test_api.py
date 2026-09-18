@@ -15,8 +15,12 @@ def test_root_contains_fastapi_trip_ui() -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "maplibre-gl" in response.text
-    assert "Determine route" in response.text
-    assert "/api/trips/analyze" in response.text
+    assert "Determine route from retained media" in response.text
+    assert "/api/trips/analyze-session" in response.text
+    assert "MAX_CONCURRENT_UPLOADS=4" in response.text
+    assert "playback-speed" in response.text
+    assert "slow-points" in response.text
+    assert "/favicon.png" in response.text
 
 
 def test_preview_alias_contains_renderer_contract() -> None:
@@ -24,3 +28,9 @@ def test_preview_alias_contains_renderer_contract() -> None:
     assert response.status_code == 200
     assert "window.setTripTime" in response.text
     assert "window.tripReady" in response.text
+
+
+def test_favicon_is_served() -> None:
+    response = client.get("/favicon.png")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")

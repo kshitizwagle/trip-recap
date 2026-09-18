@@ -10,7 +10,7 @@ The hosted app is now FastAPI end to end:
 
 ```text
 browser UI served by FastAPI
--> multipart media upload with per-file progress
+-> immediate concurrent per-file upload with discard support
 -> ExifTool metadata normalization
 -> trip clustering and segmentation
 -> OSRM road routing
@@ -21,6 +21,8 @@ browser UI served by FastAPI
 ```
 
 No Streamlit runtime is used.
+
+Route tracing and presentation controls are separated. Media uploads begin immediately with up to four concurrent uploads. Metadata is extracted from the original file first, then photos are optionally reduced to a smaller WebP display copy when that saves space. Discarded uploads disappear from the UI and are excluded from routing. Start/end points can be selected from geotagged media, including a loop that returns to the selected start. Map style and place-name granularity can change without rerunning OSRM. Playback has speed controls, optional slowdown at image-derived GPS points, and the vehicle flips to face its current route direction.
 
 ## Run locally
 
