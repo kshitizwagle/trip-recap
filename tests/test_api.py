@@ -22,6 +22,8 @@ def test_root_contains_fastapi_trip_ui() -> None:
     assert "Max 25 MB per file" in response.text
     assert "start_location" in response.text
     assert "pollUploadStatus" not in response.text
+    assert "readApiResponse" in response.text
+    assert "response.json()" not in response.text
     assert "playback-speed" in response.text
     assert "slow-points" in response.text
     assert "/favicon.png" in response.text
