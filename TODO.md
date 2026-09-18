@@ -13,6 +13,9 @@
 - [x] Milestone 9: migrate hosted app from Streamlit to FastAPI
 
 ## FastAPI hosted app
+- [x] Move metadata extraction out of the upload request and run it in-container when route generation starts
+- [x] Enforce a hard 25 MB per-file upload limit in browser and backend
+- [x] Accept arbitrary place names or latitude/longitude for start and end points
 - [x] Deduplicate negligible consecutive GPS route points while preserving their media
 - [x] Upload up to four media files concurrently as soon as they are selected
 - [x] Extract metadata before optionally compressing photos to smaller WebP display copies
