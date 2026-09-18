@@ -12,6 +12,7 @@
 - [x] Milestone 8: hosted UX polish
 
 ## Hosted demo
+- [x] Show an upload progress bar for every selected media file and per-file intake progress during analysis
 - [x] Add Street, Satellite, and Hybrid map styles using MapLibre with EOX Sentinel-2 imagery
 - [x] Force reverse-geocoded stop names to English and display only the first location segment before a comma
 - [x] Preview uploaded photos and videos before analysis, including HEIC/HEIF where supported

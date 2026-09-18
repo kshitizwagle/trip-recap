@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+from collections.abc import Callable
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
@@ -601,20 +602,46 @@ def _unique_upload_target(upload_dir: Path, original_name: str) -> Path:
         counter += 1
 
 
-def _save_uploads(files, upload_dir: Path) -> list[Path]:
+def _save_uploads(
+    files,
+    upload_dir: Path,
+    *,
+    on_progress: Callable[[int, str, int, int], None] | None = None,
+) -> list[Path]:
     paths: list[Path] = []
-    for uploaded in files:
+    chunk_size = 1024 * 1024
+
+    for index, uploaded in enumerate(files):
         name = Path(uploaded.name).name
         suffix = Path(name).suffix.lower()
         if suffix not in SUPPORTED_EXTENSIONS:
             raise ValueError(f"Unsupported media type: {name}")
 
         data = uploaded.getbuffer()
-        if len(data) > settings.max_file_bytes:
+        total_bytes = len(data)
+        if total_bytes > settings.max_file_bytes:
             raise ValueError(f"File too large: {name}")
 
         target = _unique_upload_target(upload_dir, name)
-        target.write_bytes(data)
+        written = 0
+
+        if on_progress is not None:
+            on_progress(index, name, 0, total_bytes)
+
+        with target.open("wb") as destination:
+            for offset in range(0, total_bytes, chunk_size):
+                chunk = data[offset : offset + chunk_size]
+                destination.write(chunk)
+                written += len(chunk)
+
+                if on_progress is not None:
+                    on_progress(
+                        index,
+                        name,
+                        written,
+                        total_bytes,
+                    )
+
         paths.append(target)
 
     return paths
@@ -644,6 +671,10 @@ def _render_media_previews(files) -> None:
                 st.caption(
                     f"{uploaded.name} · {_human_size(len(data))}"
                 )
+                st.progress(
+                    100,
+                    text="Uploaded",
+                )
 
                 if suffix in IMAGE_PREVIEW_EXTENSIONS:
                     try:
@@ -670,6 +701,7 @@ def _analyze(
     *,
     keep_as_one_trip: bool = True,
     place_granularity: str = "neighborhood",
+    upload_progress: Callable[[int, str, int, int], None] | None = None,
 ) -> list[dict]:
     store = TripStore()
     store.cleanup_expired(settings.data_ttl_seconds)
@@ -679,7 +711,11 @@ def _analyze(
     upload_dir = workspace / "uploads"
 
     try:
-        paths = _save_uploads(files, upload_dir)
+        paths = _save_uploads(
+            files,
+            upload_dir,
+            on_progress=upload_progress,
+        )
         media = ExifToolExtractor().extract_sync(paths)
 
         trip_gap = (
@@ -1137,6 +1173,39 @@ def render_app() -> None:
             )
         else:
             try:
+                st.caption("Preparing uploaded media")
+                intake_bars = [
+                    st.progress(
+                        0,
+                        text=f"{uploaded.name} · queued",
+                    )
+                    for uploaded in uploaded_files
+                ]
+
+                def update_upload_progress(
+                    index: int,
+                    name: str,
+                    written: int,
+                    total: int,
+                ) -> None:
+                    percentage = (
+                        100
+                        if total <= 0
+                        else min(
+                            100,
+                            round((written / total) * 100),
+                        )
+                    )
+                    status = (
+                        "ready"
+                        if percentage >= 100
+                        else f"{percentage}%"
+                    )
+                    intake_bars[index].progress(
+                        percentage,
+                        text=f"{name} · {status}",
+                    )
+
                 with st.spinner(
                     "Reading metadata and reconstructing "
                     "the trip..."
@@ -1145,6 +1214,7 @@ def render_app() -> None:
                         uploaded_files,
                         keep_as_one_trip=keep_as_one_trip,
                         place_granularity=place_granularity,
+                        upload_progress=update_upload_progress,
                     )
             except Exception as exc:
                 st.session_state.pop(
