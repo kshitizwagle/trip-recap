@@ -1,4 +1,18 @@
-# ---- Build stage ----
+# ---- Frontend build stage ----
+FROM node:22-bookworm-slim AS frontend-builder
+
+WORKDIR /frontend
+
+COPY frontend/package.json ./
+
+RUN npm install --no-audit --no-fund
+
+COPY frontend ./
+
+RUN npm run build
+
+
+# ---- Python build stage ----
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -7,13 +21,11 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Install dependencies first for a cache-friendly layer.
 COPY pyproject.toml .python-version ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-project --no-dev
 
-# Copy the source and install the project itself.
 COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -27,12 +39,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     CHROMIUM_PATH=/usr/bin/chromium \
     PORT=8000 \
-    TRIP_RECAP_DATA_DIR=/tmp/trip-recap \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-# System dependencies required by the application at runtime.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -63,8 +73,8 @@ RUN apt-get update \
         xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the application and the virtual environment built by uv.
 COPY --from=builder /app /app
+COPY --from=frontend-builder /frontend/out /app/frontend/out
 
 RUN useradd --create-home --uid 10001 appuser \
     && mkdir -p /tmp/trip-recap \
