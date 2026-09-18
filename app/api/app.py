@@ -509,6 +509,15 @@ if (FRONTEND_OUT / "_next").exists():
         name="next-static",
     )
 
+if (FRONTEND_OUT / "maplibre").exists():
+    api.mount(
+        "/maplibre",
+        StaticFiles(
+            directory=FRONTEND_OUT / "maplibre",
+        ),
+        name="maplibre-static",
+    )
+
 
 @api.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def root() -> Response:
