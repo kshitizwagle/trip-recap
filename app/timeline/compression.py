@@ -11,7 +11,7 @@ def compress_gap_seconds(real_seconds: float) -> float:
         return 0.0
     if real_seconds <= ANCHORS[0][0]:
         return max(0.5, real_seconds / ANCHORS[0][0] * ANCHORS[0][1])
-    if real_seconds >= ANCHORS[-1][0]:
+    if real_seconds > ANCHORS[-1][0]:
         extra = log(real_seconds / ANCHORS[-1][0] + 1)
         return min(8.0, ANCHORS[-1][1] + 0.5 * extra)
 
