@@ -51,15 +51,13 @@ API docs are available at `/docs`.
 
 ## Docker
 
-The Docker image includes all current runtime dependencies:
+The Docker image uses a multi-stage build:
 
-- `uv`
-- Python 3.12 installed by `uv`
-- ExifTool
-- FFmpeg
-- Chromium
-- Chromium runtime libraries and fonts
-- Python packages synced from `pyproject.toml`
+- builder: `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`
+- runtime: `python:3.12-slim-bookworm`
+- `uv` builds the virtual environment only in the builder stage
+- the runtime receives the finished `.venv`, not `uv`
+- ExifTool, FFmpeg, Chromium, runtime libraries, and fonts are installed in the runtime image
 
 Build:
 
@@ -73,10 +71,10 @@ Run:
 docker run --rm -p 8000:8000 trip-recap
 ```
 
-The container uses `uv` for Python installation, dependency synchronization, and process execution. It starts the app with:
+The builder image already contains Python 3.12, so Docker does not download or install Python with `uv`. The final image starts the prebuilt virtual environment directly:
 
 ```text
-uv run --no-sync uvicorn main:app --host 0.0.0.0 --port $PORT
+python -m uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
 `PORT` defaults to `8000`, so platforms that inject their own port can override it automatically. The container sets `CHROMIUM_PATH=/usr/bin/chromium` and stores temporary trip data under `/tmp/trip-recap`.

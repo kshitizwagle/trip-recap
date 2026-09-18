@@ -1,18 +1,38 @@
-FROM ghcr.io/astral-sh/uv:bookworm-slim
+# ---- Build stage ----
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_PYTHON_INSTALL_DIR=/opt/uv/python \
-    UV_PROJECT_ENVIRONMENT=/app/.venv \
-    UV_COMPILE_BYTECODE=1 \
+ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_CACHE_DIR=/tmp/uv-cache \
-    CHROMIUM_PATH=/usr/bin/chromium \
-    PORT=8000 \
-    TRIP_RECAP_DATA_DIR=/tmp/trip-recap
+    UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /app
 
+# Install dependencies first for a cache-friendly layer.
+COPY pyproject.toml .python-version ./
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-install-project --no-dev
+
+# Copy the source and install the project itself.
+COPY . .
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev
+
+
+# ---- Runtime stage ----
+FROM python:3.12-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    CHROMIUM_PATH=/usr/bin/chromium \
+    PORT=8000 \
+    TRIP_RECAP_DATA_DIR=/tmp/trip-recap \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
+
+# System dependencies required by the application at runtime.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -43,25 +63,18 @@ RUN apt-get update \
         xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .python-version ./
+# Copy the application and the virtual environment built by uv.
+COPY --from=builder /app /app
 
-RUN uv python install 3.12 \
-    && uv sync --no-dev --no-install-project
-
-COPY . .
-
-RUN uv sync --no-dev \
-    && useradd --create-home --uid 10001 appuser \
-    && mkdir -p /tmp/trip-recap /tmp/uv-cache \
-    && chown -R appuser:appuser /app /tmp/trip-recap /tmp/uv-cache
-
-ENV PATH="/app/.venv/bin:$PATH"
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /tmp/trip-recap \
+    && chown -R appuser:appuser /app /tmp/trip-recap
 
 USER appuser
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD uv run --no-sync python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8000') + '/api/health', timeout=3).read()" || exit 1
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8000') + '/api/health', timeout=3).read()" || exit 1
 
-CMD ["sh", "-c", "exec uv run --no-sync uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "exec python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
