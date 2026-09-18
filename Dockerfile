@@ -1,8 +1,12 @@
-FROM python:3.12-slim-bookworm
+FROM ghcr.io/astral-sh/uv:bookworm-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
+    UV_PYTHON_INSTALL_DIR=/opt/uv/python \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_CACHE_DIR=/tmp/uv-cache \
     CHROMIUM_PATH=/usr/bin/chromium \
     PORT=8000 \
     TRIP_RECAP_DATA_DIR=/tmp/trip-recap
@@ -39,22 +43,25 @@ RUN apt-get update \
         xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY pyproject.toml .python-version ./
 
-RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements.txt
+RUN uv python install 3.12 \
+    && uv sync --no-dev --no-install-project
 
 COPY . .
 
-RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /tmp/trip-recap \
-    && chown -R appuser:appuser /app /tmp/trip-recap
+RUN uv sync --no-dev \
+    && useradd --create-home --uid 10001 appuser \
+    && mkdir -p /tmp/trip-recap /tmp/uv-cache \
+    && chown -R appuser:appuser /app /tmp/trip-recap /tmp/uv-cache
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 USER appuser
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8000') + '/api/health', timeout=3).read()" || exit 1
+    CMD uv run --no-sync python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8000') + '/api/health', timeout=3).read()" || exit 1
 
-CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "exec uv run --no-sync uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]

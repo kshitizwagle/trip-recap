@@ -11,9 +11,10 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
-      - run: pip install -r requirements.txt
-      - run: python -c "import app; print(app.__file__)"
-      - run: pytest -q
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - run: uv run python -c "import app; print(app.__file__)"
+      - run: uv run pytest -q

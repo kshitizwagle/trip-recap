@@ -24,14 +24,13 @@ No Streamlit runtime is used.
 
 ## Run locally
 
-Python 3.12 is pinned in `.python-version`.
+Python 3.12 is pinned in `.python-version`. Python and project dependencies are managed with `uv`.
 
-Install Python dependencies:
+Install Python and sync the project:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uv python install 3.12
+uv sync --extra dev
 ```
 
 The metadata pipeline currently also expects the `exiftool` executable. MP4 rendering expects Chromium and FFmpeg.
@@ -39,7 +38,7 @@ The metadata pipeline currently also expects the `exiftool` executable. MP4 rend
 Run:
 
 ```bash
-fastapi dev
+uv run fastapi dev
 ```
 
 Then open:
@@ -54,12 +53,13 @@ API docs are available at `/docs`.
 
 The Docker image includes all current runtime dependencies:
 
-- Python 3.12
+- `uv`
+- Python 3.12 installed by `uv`
 - ExifTool
 - FFmpeg
 - Chromium
 - Chromium runtime libraries and fonts
-- all Python packages from `requirements.txt`
+- Python packages synced from `pyproject.toml`
 
 Build:
 
@@ -73,10 +73,10 @@ Run:
 docker run --rm -p 8000:8000 trip-recap
 ```
 
-The container starts the app with:
+The container uses `uv` for Python installation, dependency synchronization, and process execution. It starts the app with:
 
 ```text
-uvicorn main:app --host 0.0.0.0 --port $PORT
+uv run --no-sync uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
 `PORT` defaults to `8000`, so platforms that inject their own port can override it automatically. The container sets `CHROMIUM_PATH=/usr/bin/chromium` and stores temporary trip data under `/tmp/trip-recap`.
@@ -120,7 +120,8 @@ Environment variables:
 ## Tests
 
 ```bash
-PYTHONPATH=. pytest -q
+uv sync --extra dev
+PYTHONPATH=. uv run pytest -q
 ```
 
 Tests use synthetic metadata and mocked routing so they do not depend on live OSRM or private media fixtures.
