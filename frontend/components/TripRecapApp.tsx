@@ -497,13 +497,31 @@ export default function TripRecapApp({
 
       setCurrent(trip);
 
-      retained.forEach((record) =>
+      const ignored = new Set(
+        parsed.data.ignored_upload_ids ?? [],
+      );
+      retained.forEach((record) => {
+        if (
+          record.serverId &&
+          ignored.has(record.serverId)
+        ) {
+          removeUploadLocal(record.clientId);
+          return;
+        }
         mutateUpload(record.clientId, {
           progressText:
             'Processed · raw upload removed',
           serverId: null,
-        }),
-      );
+        });
+      });
+
+      if (ignored.size) {
+        toast.warning(
+          `${ignored.size} unavailable upload${
+            ignored.size === 1 ? '' : 's'
+          } ignored`,
+        );
+      }
 
       toast.success('Route ready', {
         id: toastId,
