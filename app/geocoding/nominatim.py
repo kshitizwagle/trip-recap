@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -249,3 +250,71 @@ class NominatimReverseGeocoder:
             payload,
             granularity,
         )
+
+
+    def forward(
+        self,
+        query: str,
+    ) -> dict[str, Any] | None:
+        normalized = " ".join(query.split()).strip()
+        if not normalized:
+            return None
+
+        cache_key = hashlib.sha256(
+            normalized.casefold().encode("utf-8")
+        ).hexdigest()
+        cache_path = self.cache_dir / f"search_en_{cache_key}.json"
+
+        if cache_path.exists():
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        else:
+            wait_for = self.min_interval_seconds - (
+                time.monotonic() - self._last_request_at
+            )
+            if wait_for > 0:
+                time.sleep(wait_for)
+
+            owns_client = self.client is None
+            client = self.client or httpx.Client(
+                headers={"User-Agent": self.user_agent},
+                timeout=self.timeout_seconds,
+            )
+            try:
+                response = client.get(
+                    f"{self.base_url}/search",
+                    params={
+                        "q": normalized,
+                        "format": "jsonv2",
+                        "addressdetails": 1,
+                        "limit": 1,
+                        "accept-language": "en",
+                    },
+                    headers={"User-Agent": self.user_agent},
+                )
+                self._last_request_at = time.monotonic()
+                response.raise_for_status()
+                payload = response.json()
+            finally:
+                if owns_client:
+                    client.close()
+
+            cache_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+        if not payload:
+            return None
+
+        result = payload[0]
+        try:
+            latitude = float(result["lat"])
+            longitude = float(result["lon"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+        return {
+            "latitude": latitude,
+            "longitude": longitude,
+            "display_name": result.get("display_name"),
+        }
