@@ -18,7 +18,10 @@ def test_root_contains_fastapi_trip_ui() -> None:
     assert "Determine route from retained media" in response.text
     assert "/api/trips/analyze-session" in response.text
     assert "MAX_CONCURRENT_UPLOADS=4" in response.text
-    assert "pollUploadStatus" in response.text
+    assert "MAX_FILE_BYTES=25*1024*1024" in response.text
+    assert "Max 25 MB per file" in response.text
+    assert "start_location" in response.text
+    assert "pollUploadStatus" not in response.text
     assert "playback-speed" in response.text
     assert "slow-points" in response.text
     assert "/favicon.png" in response.text
@@ -35,3 +38,9 @@ def test_favicon_is_served() -> None:
     response = client.get("/favicon.png")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/png")
+
+
+def test_public_health() -> None:
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
