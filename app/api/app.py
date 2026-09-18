@@ -4,6 +4,7 @@ import asyncio
 import json
 import mimetypes
 import shutil
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -46,10 +47,48 @@ PLACE_GRANULARITIES = {"specific", "neighborhood", "city", "region"}
 IMAGE_PREVIEW_MAX_EDGE = 1920
 IMAGE_PREVIEW_QUALITY = 82
 
+store = TripStore()
+render_service = RenderService(store)
+
+
+async def _cleanup_expired_loop() -> None:
+    interval = max(
+        60,
+        min(
+            300,
+            settings.data_ttl_seconds // 4,
+        ),
+    )
+    while True:
+        await asyncio.sleep(interval)
+        await asyncio.to_thread(
+            store.cleanup_expired,
+            settings.data_ttl_seconds,
+        )
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await asyncio.to_thread(
+        store.cleanup_expired,
+        settings.data_ttl_seconds,
+    )
+    cleanup_task = asyncio.create_task(
+        _cleanup_expired_loop()
+    )
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
 api = FastAPI(
     title="Trip Recap",
     version="0.3.0",
     description="Metadata-driven road-trip reconstruction and recap generation.",
+    lifespan=lifespan,
 )
 
 
@@ -67,10 +106,6 @@ async def unhandled_exception_handler(
             )
         },
     )
-
-
-store = TripStore()
-render_service = RenderService(store)
 
 
 class AnalyzeSessionRequest(BaseModel):
