@@ -9,7 +9,7 @@ client = TestClient(api)
 def test_health() -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.text == "OK"
 
 
 def test_backend_does_not_serve_frontend() -> None:
@@ -50,7 +50,7 @@ def test_render_uses_configured_frontend_url(monkeypatch) -> None:
 def test_public_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.text == "OK"
 
 
 def test_location_search_returns_geocoder_suggestions(monkeypatch) -> None:

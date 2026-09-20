@@ -492,8 +492,8 @@ def _route_progresses(route_model, observation_count: int) -> list[float]:
 
 @api.get("/health")
 @api.get("/api/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> Response:
+    return Response(content="OK", media_type="text/plain")
 
 
 @api.get("/api/locations/suggest")

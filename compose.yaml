@@ -2,7 +2,6 @@ services:
   backend:
     build:
       context: ./backend
-      target: runtime
     environment:
       PORT: "8001"
       TRIP_RECAP_DATA_DIR: /tmp/trip-recap
@@ -11,4 +10,4 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "127.0.0.1:8001:8001"
+      - "0.0.0.0:8001:8001"
