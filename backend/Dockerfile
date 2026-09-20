@@ -26,7 +26,7 @@ FROM python:3.12-slim-trixie AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8001 \
+    PORT=58001 \
     TRIP_RECAP_DATA_DIR=/tmp/trip-recap \
     PATH="/app/.venv/bin:$PATH"
 
@@ -49,9 +49,9 @@ RUN playwright install --with-deps chromium \
 
 RUN mkdir -p /tmp/trip-recap
 
-EXPOSE 8001
+EXPOSE 58001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '8001') + '/api/health', timeout=3).read()" || exit 1
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '58001') + '/api/health', timeout=3).read()" || exit 1
 
-CMD ["sh", "-c", "exec python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001} --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "exec python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-58001} --proxy-headers --forwarded-allow-ips='*'"]

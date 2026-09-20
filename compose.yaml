@@ -3,11 +3,11 @@ services:
     build:
       context: ./backend
     environment:
-      PORT: "8001"
+      PORT: "58001"
       TRIP_RECAP_DATA_DIR: /tmp/trip-recap
       TRIP_RECAP_CORS_ORIGINS: ${TRIP_RECAP_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://host.docker.internal:3000}
       TRIP_RECAP_RENDER_PREVIEW_URL: ${TRIP_RECAP_RENDER_PREVIEW_URL:-http://host.docker.internal:3000/recap}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "0.0.0.0:8001:8001"
+      - "0.0.0.0:58001:58001"

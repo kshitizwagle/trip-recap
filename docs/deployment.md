@@ -37,9 +37,9 @@ docker compose up --build -d
 ```
 
 The container includes ExifTool, Chromium, and FFmpeg. The host port binds to
-`127.0.0.1:8001`. Point a host-running Cloudflare Tunnel at
-`http://127.0.0.1:8001` for `api.example.com`. A containerized tunnel must share
-the Compose network and address `http://backend:8001` instead.
+`127.0.0.1:58001`. Point a host-running Cloudflare Tunnel at
+`http://127.0.0.1:58001` for `api.example.com`. A containerized tunnel must share
+the Compose network and address `http://backend:58001` instead.
 This repository does not create or configure your Cloudflare tunnel.
 
 Add your exact custom frontend domain to `TRIP_RECAP_CORS_ORIGINS` if used.
@@ -62,7 +62,7 @@ Backend terminal (Python 3.12; ExifTool, FFmpeg, and Chromium installed):
 ```sh
 cd backend
 uv sync --extra dev
-uv run uvicorn main:app --reload --port 8001
+uv run uvicorn main:app --reload --port 58001
 ```
 
 Frontend terminal:
@@ -73,8 +73,8 @@ npm ci --ignore-scripts
 npm run dev
 ```
 
-Open `http://localhost:3000`; API documentation is at `http://localhost:8001/docs`.
-Frontend requests default to `http://localhost:8001`. Set
+Open `http://localhost:3000`; API documentation is at `http://localhost:58001/docs`.
+Frontend requests default to `http://localhost:58001`. Set
 `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` to override it.
 Without Docker, the renderer defaults to `http://localhost:3000/recap`.
 With Compose and a host-running frontend, its default is

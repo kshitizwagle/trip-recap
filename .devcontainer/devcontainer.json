@@ -19,15 +19,15 @@
   },
   "updateContentCommand": "pip install -r backend/requirements.txt",
   "postAttachCommand": {
-    "server": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8001"
+    "server": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 58001"
   },
   "portsAttributes": {
-    "8001": {
+    "58001": {
       "label": "Backend API",
       "onAutoForward": "openPreview"
     }
   },
   "forwardPorts": [
-    8001
+    58001
   ]
 }
