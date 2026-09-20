@@ -87,6 +87,9 @@ api = FastAPI(
     version="0.3.0",
     description="Metadata-driven road-trip reconstruction and recap generation.",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 
