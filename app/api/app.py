@@ -4,6 +4,7 @@ import asyncio
 import json
 import mimetypes
 import shutil
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -17,6 +18,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -25,7 +27,7 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from app.config import settings
-from app.geocoding import NominatimReverseGeocoder
+from app.geocoding import NominatimReverseGeocoder, PhotonPlaceSearch
 from app.metadata.extractor import SUPPORTED_EXTENSIONS, ExifToolExtractor
 from app.models.media import MediaPoint, MediaType
 from app.renderer.service import RenderService
@@ -44,6 +46,9 @@ EXPORTED_WEB_DIR = PROJECT_DIR / "out"
 LEGACY_WEB_DIR = PROJECT_DIR / "app" / "web"
 WEB_INDEX = EXPORTED_WEB_DIR / "index.html"
 WORKSPACE_WEB_INDEX = EXPORTED_WEB_DIR / "recap.html"
+FRONTEND_OUT = PROJECT_DIR / "frontend" / "out"
+FRONTEND_INDEX = FRONTEND_OUT / "index.html"
+FRONTEND_PREVIEW_INDEX = FRONTEND_OUT / "preview" / "index.html"
 FAVICON_PATH = (
     EXPORTED_WEB_DIR / "favicon.png"
     if (EXPORTED_WEB_DIR / "favicon.png").exists()
@@ -54,19 +59,65 @@ PLACE_GRANULARITIES = {"specific", "neighborhood", "city", "region"}
 IMAGE_PREVIEW_MAX_EDGE = 1920
 IMAGE_PREVIEW_QUALITY = 82
 
+store = TripStore()
+render_service = RenderService(store)
+
+
+async def _cleanup_expired_loop() -> None:
+    interval = max(
+        60,
+        min(
+            300,
+            settings.data_ttl_seconds // 4,
+        ),
+    )
+    while True:
+        await asyncio.sleep(interval)
+        await asyncio.to_thread(
+            store.cleanup_expired,
+            settings.data_ttl_seconds,
+        )
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await asyncio.to_thread(
+        store.cleanup_expired,
+        settings.data_ttl_seconds,
+    )
+    cleanup_task = asyncio.create_task(
+        _cleanup_expired_loop()
+    )
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
 api = FastAPI(
     title="Trip Recap",
     version="0.3.0",
     description="Metadata-driven road-trip reconstruction and recap generation.",
+    lifespan=lifespan,
 )
-if (EXPORTED_WEB_DIR / "_next").is_dir():
-    api.mount(
-        "/_next",
-        StaticFiles(directory=EXPORTED_WEB_DIR / "_next"),
-        name="next-assets",
+
+
+@api.exception_handler(Exception)
+async def unhandled_exception_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": (
+                f"Internal server error: "
+                f"{type(exc).__name__}: {exc}"
+            )
+        },
     )
-store = TripStore()
-render_service = RenderService(store)
 
 
 class AnalyzeSessionRequest(BaseModel):
@@ -76,6 +127,12 @@ class AnalyzeSessionRequest(BaseModel):
     start_location: str | None = None
     end_location: str | None = None
     return_to_start: bool = False
+
+
+class UploadInitRequest(BaseModel):
+    filename: str
+    size_bytes: int
+    chunk_size_bytes: int
 
 
 def _uuid(value: str, label: str) -> str:
@@ -134,6 +191,87 @@ def _load_upload_record(session_id: str, upload_id: str) -> dict:
         )
     payload["_path"] = str(path)
     return payload
+
+
+def _chunk_dir(session_id: str, upload_id: str) -> Path:
+    path = (
+        _session_dir(session_id)
+        / "chunks"
+        / _uuid(upload_id, "upload id")
+    )
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _chunk_path(
+    session_id: str,
+    upload_id: str,
+    chunk_index: int,
+) -> Path:
+    return (
+        _chunk_dir(session_id, upload_id)
+        / f"{chunk_index:05d}.part"
+    )
+
+
+def _assemble_chunks(
+    *,
+    session_id: str,
+    upload_id: str,
+    filename: str,
+    total_chunks: int,
+    expected_bytes: int,
+) -> Path:
+    workspace = _session_dir(session_id)
+    target = _unique_target(
+        workspace / "uploads",
+        filename,
+    )
+    written = 0
+
+    try:
+        with target.open("wb") as destination:
+            for chunk_index in range(total_chunks):
+                chunk = _chunk_path(
+                    session_id,
+                    upload_id,
+                    chunk_index,
+                )
+                if not chunk.exists():
+                    raise RuntimeError(
+                        f"Missing upload chunk {chunk_index + 1}"
+                    )
+
+                with chunk.open("rb") as source:
+                    while data := source.read(1024 * 1024):
+                        written += len(data)
+                        if written > expected_bytes:
+                            raise RuntimeError(
+                                "Uploaded data exceeds declared file size"
+                            )
+                        destination.write(data)
+
+        if written != expected_bytes:
+            raise RuntimeError(
+                f"Uploaded {written} bytes, expected {expected_bytes}"
+            )
+
+        return target
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def _cleanup_upload_chunks(
+    session_id: str,
+    upload_id: str,
+) -> None:
+    shutil.rmtree(
+        _session_dir(session_id)
+        / "chunks"
+        / _uuid(upload_id, "upload id"),
+        ignore_errors=True,
+    )
 
 
 def _compress_photo_after_metadata(media: MediaPoint) -> tuple[Path, bool]:
@@ -207,10 +345,17 @@ async def _resolve_location(value: str | None) -> tuple[float, float] | None:
     geocoder = NominatimReverseGeocoder(
         store.root / "cache" / "places"
     )
-    result = await asyncio.to_thread(
-        geocoder.forward,
-        text,
-    )
+    try:
+        result = await asyncio.to_thread(
+            geocoder.forward,
+            text,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Location lookup failed for '{text}': {exc}",
+        ) from exc
+
     if result is None:
         raise HTTPException(
             status_code=422,
@@ -352,11 +497,38 @@ def _route_progresses(route_model, observation_count: int) -> list[float]:
 def _web_html(index_path: Path = WEB_INDEX) -> str:
     if index_path.exists():
         return index_path.read_text(encoding="utf-8")
+    if index_path == WEB_INDEX and FRONTEND_INDEX.exists():
+        return FRONTEND_INDEX.read_text(encoding="utf-8")
+    if index_path == WORKSPACE_WEB_INDEX and FRONTEND_PREVIEW_INDEX.exists():
+        return FRONTEND_PREVIEW_INDEX.read_text(encoding="utf-8")
     return """<!doctype html>
 <html lang="en">
   <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trip Recap</title></head>
   <body class="trip-app"><main><h1>Trip Recap</h1><p data-frontend-build="required">Run npm run build before starting FastAPI.</p></main></body>
 </html>"""
+
+
+if (EXPORTED_WEB_DIR / "_next").exists():
+    api.mount(
+        "/_next",
+        StaticFiles(directory=EXPORTED_WEB_DIR / "_next"),
+        name="next-static",
+    )
+elif (FRONTEND_OUT / "_next").exists():
+    api.mount(
+        "/_next",
+        StaticFiles(directory=FRONTEND_OUT / "_next"),
+        name="next-static",
+    )
+
+if (FRONTEND_OUT / "maplibre").exists():
+    api.mount(
+        "/maplibre",
+        StaticFiles(
+            directory=FRONTEND_OUT / "maplibre",
+        ),
+        name="maplibre-static",
+    )
 
 
 @api.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -371,6 +543,7 @@ async def recap() -> str:
 
 
 @api.get("/preview", response_class=HTMLResponse, include_in_schema=False)
+@api.get("/preview/", response_class=HTMLResponse, include_in_schema=False)
 async def preview() -> str:
     return _web_html(WORKSPACE_WEB_INDEX)
 
@@ -390,6 +563,29 @@ async def icon() -> FileResponse:
 @api.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@api.get("/api/locations/suggest")
+async def suggest_locations(
+    q: str = Query(..., min_length=3, max_length=120),
+    limit: int = Query(5, ge=1, le=8),
+) -> dict:
+    search = PhotonPlaceSearch(
+        store.root / "cache" / "places"
+    )
+    try:
+        suggestions = await asyncio.to_thread(
+            search.search,
+            q,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Location suggestions failed: {exc}",
+        ) from exc
+
+    return {"suggestions": suggestions}
 
 
 @api.get("/api/locations/search")
@@ -560,6 +756,210 @@ def _trip_payload(
 
 
 
+@api.post(
+    "/api/upload-sessions/{session_id}/media/init",
+    status_code=201,
+)
+async def init_chunked_upload(
+    session_id: str,
+    request: UploadInitRequest,
+) -> dict:
+    store.cleanup_expired(settings.data_ttl_seconds)
+    session_id = _uuid(session_id, "upload session id")
+    filename = Path(request.filename).name
+    suffix = Path(filename).suffix.lower()
+
+    if suffix not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported media type: {filename}",
+        )
+    if request.size_bytes <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="File must not be empty",
+        )
+    if request.size_bytes > settings.max_file_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large: {filename}",
+        )
+    if not 256 * 1024 <= request.chunk_size_bytes <= 4 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="Chunk size must be between 256 KiB and 4 MiB",
+        )
+
+    upload_id = str(uuid4())
+    total_chunks = (
+        request.size_bytes
+        + request.chunk_size_bytes
+        - 1
+    ) // request.chunk_size_bytes
+
+    uploading = {
+        "id": upload_id,
+        "filename": filename,
+        "state": "uploading",
+        "size_bytes": request.size_bytes,
+        "stored_bytes": 0,
+        "chunk_size_bytes": request.chunk_size_bytes,
+        "total_chunks": total_chunks,
+    }
+    _write_upload_status(
+        session_id,
+        upload_id,
+        uploading,
+    )
+    return _public_upload_status(uploading)
+
+
+@api.put(
+    "/api/upload-sessions/{session_id}/media/{upload_id}/chunks/{chunk_index}",
+    status_code=204,
+)
+async def upload_media_chunk(
+    session_id: str,
+    upload_id: str,
+    chunk_index: int,
+    request: Request,
+) -> Response:
+    session_id = _uuid(session_id, "upload session id")
+    upload_id = _uuid(upload_id, "upload id")
+    status = _read_upload_status(session_id, upload_id)
+
+    if status.get("state") != "uploading":
+        raise HTTPException(
+            status_code=409,
+            detail="Upload is not accepting chunks",
+        )
+
+    total_chunks = int(status["total_chunks"])
+    chunk_size = int(status["chunk_size_bytes"])
+    expected_bytes = int(status["size_bytes"])
+
+    if chunk_index < 0 or chunk_index >= total_chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid chunk index",
+        )
+
+    expected_chunk_bytes = min(
+        chunk_size,
+        expected_bytes - chunk_index * chunk_size,
+    )
+    target = _chunk_path(
+        session_id,
+        upload_id,
+        chunk_index,
+    )
+    temporary = target.with_suffix(".tmp")
+    received = 0
+
+    try:
+        with temporary.open("wb") as handle:
+            async for data in request.stream():
+                received += len(data)
+                if received > expected_chunk_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="Chunk is larger than expected",
+                    )
+                handle.write(data)
+
+        if received != expected_chunk_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Chunk size mismatch: got {received}, "
+                    f"expected {expected_chunk_bytes}"
+                ),
+            )
+
+        temporary.replace(target)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+    return Response(status_code=204)
+
+
+@api.post(
+    "/api/upload-sessions/{session_id}/media/{upload_id}/complete",
+)
+async def complete_chunked_upload(
+    session_id: str,
+    upload_id: str,
+) -> dict:
+    session_id = _uuid(session_id, "upload session id")
+    upload_id = _uuid(upload_id, "upload id")
+    status = _read_upload_status(session_id, upload_id)
+
+    if status.get("state") == "uploaded":
+        return _public_upload_status(status)
+    if status.get("state") != "uploading":
+        raise HTTPException(
+            status_code=409,
+            detail="Upload cannot be completed",
+        )
+
+    total_chunks = int(status["total_chunks"])
+    missing = [
+        index
+        for index in range(total_chunks)
+        if not _chunk_path(
+            session_id,
+            upload_id,
+            index,
+        ).exists()
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Upload is missing {len(missing)} chunk"
+                f"{'s' if len(missing) != 1 else ''}"
+            ),
+        )
+
+    try:
+        target = await asyncio.to_thread(
+            _assemble_chunks,
+            session_id=session_id,
+            upload_id=upload_id,
+            filename=status["filename"],
+            total_chunks=total_chunks,
+            expected_bytes=int(status["size_bytes"]),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    uploaded = {
+        **status,
+        "state": "uploaded",
+        "stored_bytes": target.stat().st_size,
+        "preview_url": (
+            f"/api/upload-sessions/{session_id}/media/"
+            f"{upload_id}/preview"
+        ),
+        "_path": str(target),
+    }
+    _write_upload_status(
+        session_id,
+        upload_id,
+        uploaded,
+    )
+    await asyncio.to_thread(
+        _cleanup_upload_chunks,
+        session_id,
+        upload_id,
+    )
+    return _public_upload_status(uploaded)
+
+
 @api.post("/api/upload-sessions/{session_id}/media", status_code=201)
 async def upload_media(
     session_id: str,
@@ -611,6 +1011,12 @@ async def discard_uploaded_media(session_id: str, upload_id: str) -> dict:
                 Path(raw_path).unlink(missing_ok=True)
         finally:
             status_path.unlink(missing_ok=True)
+
+    await asyncio.to_thread(
+        _cleanup_upload_chunks,
+        session_id,
+        upload_id,
+    )
     return {"status": "discarded", "id": upload_id}
 
 
@@ -650,6 +1056,10 @@ async def uploaded_media_preview(session_id: str, upload_id: str):
 @api.post("/api/trips/analyze-session")
 async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
     store.cleanup_expired(settings.data_ttl_seconds)
+    session_id = _uuid(
+        request.session_id,
+        "upload session id",
+    )
 
     if not request.upload_ids:
         raise HTTPException(status_code=400, detail="No retained media to analyze")
@@ -660,10 +1070,31 @@ async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
         )
 
     upload_ids = list(dict.fromkeys(request.upload_ids))
-    records = [
-        _load_upload_record(request.session_id, upload_id)
-        for upload_id in upload_ids
-    ]
+    records: list[dict] = []
+    ignored_upload_ids: list[str] = []
+
+    for upload_id in upload_ids:
+        try:
+            record = _load_upload_record(
+                session_id,
+                upload_id,
+            )
+        except HTTPException as exc:
+            if exc.status_code in {404, 409}:
+                ignored_upload_ids.append(upload_id)
+                continue
+            raise
+        records.append(record)
+
+    if not records:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No available retained uploads to analyze. "
+                "Missing, failed, discarded, or expired uploads were ignored."
+            ),
+        )
+
     paths = [Path(record["_path"]) for record in records]
 
     try:
@@ -762,10 +1193,19 @@ async def analyze_uploaded_session(request: AnalyzeSessionRequest) -> dict:
             )
         )
 
-    return {
-        "session_id": request.session_id,
+    response = {
+        "session_id": session_id,
         "trips": results,
+        "ignored_upload_ids": ignored_upload_ids,
+        "ignored_upload_count": len(ignored_upload_ids),
     }
+
+    await asyncio.to_thread(
+        shutil.rmtree,
+        store.root / "workspaces" / session_id,
+        True,
+    )
+    return response
 
 
 @api.get("/api/trips/{trip_id}/places")

@@ -1,3 +1,4 @@
+from .photon import PhotonPlaceSearch
 from .nominatim import (
     NominatimReverseGeocoder,
     PlaceGranularity,
@@ -6,6 +7,7 @@ from .nominatim import (
 )
 
 __all__ = [
+    "PhotonPlaceSearch",
     "NominatimReverseGeocoder",
     "PlaceGranularity",
     "format_place_name",

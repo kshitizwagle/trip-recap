@@ -18,3 +18,18 @@ jobs:
       - run: uv sync --extra dev
       - run: uv run python -c "import app; print(app.__file__)"
       - run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: test -f out/maplibre/maplibre-gl-worker.mjs
+      - run: test -f out/maplibre/maplibre-gl-shared.mjs
