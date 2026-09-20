@@ -1,5 +1,5 @@
-import TripRecapPage from "@/components/trip-recap/TripRecapPage";
+import TripRecapIntro from "@/components/trip-recap/TripRecapIntro";
 
 export default function Page() {
-  return <TripRecapPage />;
+  return <TripRecapIntro />;
 }

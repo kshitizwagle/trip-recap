@@ -44,6 +44,7 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 EXPORTED_WEB_DIR = PROJECT_DIR / "out"
 LEGACY_WEB_DIR = PROJECT_DIR / "app" / "web"
 WEB_INDEX = EXPORTED_WEB_DIR / "index.html"
+WORKSPACE_WEB_INDEX = EXPORTED_WEB_DIR / "recap.html"
 FAVICON_PATH = (
     EXPORTED_WEB_DIR / "favicon.png"
     if (EXPORTED_WEB_DIR / "favicon.png").exists()
@@ -348,9 +349,9 @@ def _route_progresses(route_model, observation_count: int) -> list[float]:
     return progresses[:observation_count]
 
 
-def _web_html() -> str:
-    if WEB_INDEX.exists():
-        return WEB_INDEX.read_text(encoding="utf-8")
+def _web_html(index_path: Path = WEB_INDEX) -> str:
+    if index_path.exists():
+        return index_path.read_text(encoding="utf-8")
     return """<!doctype html>
 <html lang="en">
   <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trip Recap</title></head>
@@ -363,9 +364,15 @@ async def root() -> str:
     return _web_html()
 
 
+@api.get("/recap", response_class=HTMLResponse, include_in_schema=False)
+@api.get("/recap/", response_class=HTMLResponse, include_in_schema=False)
+async def recap() -> str:
+    return _web_html(WORKSPACE_WEB_INDEX)
+
+
 @api.get("/preview", response_class=HTMLResponse, include_in_schema=False)
 async def preview() -> str:
-    return _web_html()
+    return _web_html(WORKSPACE_WEB_INDEX)
 
 
 @api.get("/favicon.png", include_in_schema=False)

@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect, useRef, useState} from "react";
+import {Spinner} from "@astryxdesign/core";
 import {searchLocations, type LocationSuggestion} from "@/lib/trip-api";
 
 interface LocationAutocompleteProps {
@@ -27,6 +28,7 @@ export default function LocationAutocomplete({
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
   const selectionRef = useRef(false);
   const closeTimerRef = useRef<number | null>(null);
@@ -37,6 +39,7 @@ export default function LocationAutocomplete({
 
     if (selectionRef.current) {
       selectionRef.current = false;
+      setIsLoading(false);
       setSuggestions([]);
       setActiveIndex(-1);
       setIsOpen(false);
@@ -45,18 +48,21 @@ export default function LocationAutocomplete({
 
     const query = value.trim();
     if (query.length < 2 || isDisabled) {
+      setIsLoading(false);
       setSuggestions([]);
       setActiveIndex(-1);
       setIsOpen(false);
       return;
     }
 
+    setIsLoading(true);
     const timeout = window.setTimeout(() => {
       const controller = new AbortController();
       requestRef.current = controller;
       searchLocations(query, controller.signal)
         .then(({results}) => {
           if (controller.signal.aborted) return;
+          setIsLoading(false);
           const next = results.filter((result) => result.display_name).slice(0, 5);
           setSuggestions(next);
           setActiveIndex(-1);
@@ -64,6 +70,7 @@ export default function LocationAutocomplete({
         })
         .catch((error: unknown) => {
           if (isAbortError(error)) return;
+          setIsLoading(false);
           setSuggestions([]);
           setActiveIndex(-1);
           setIsOpen(false);
@@ -138,10 +145,20 @@ export default function LocationAutocomplete({
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={isOpen}
+          aria-busy={isLoading}
           aria-controls={listboxId}
           aria-activedescendant={activeIndex >= 0 ? `${id}-suggestion-${activeIndex}` : undefined}
           autoComplete="off"
         />
+        {isLoading && (
+          <Spinner
+            size="sm"
+            shade="inherit"
+            aria-label="Loading location suggestions"
+            aria-hidden="true"
+            className="location-loading-spinner"
+          />
+        )}
         {isOpen && suggestions.length > 0 && (
           <ul id={listboxId} className="location-suggestions" role="listbox">
             {suggestions.map((suggestion, index) => (

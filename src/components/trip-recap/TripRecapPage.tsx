@@ -347,41 +347,18 @@ export default function TripRecapPage() {
   return (
     <AppShell height="auto" contentPadding={0} variant="section" className={`trip-app ${renderClass}`}>
       <div className="trip-page">
-        <div className="trip-header">
-          <div className="trip-header-mark" aria-hidden="true">TR</div>
-          <div className="trip-header-copy">
-            <Text as="p" type="label" className="eyebrow">TRIP RECAP / MEDIA → MEMORY</Text>
-            <Heading level={1} type="display-1">Make a trip out of the camera roll.</Heading>
-            <Text as="p" type="supporting" className="trip-lede">
-              Retain the original media. Let its metadata draw the route. The map remembers what the camera actually saw.
-            </Text>
-          </div>
-          <Badge variant="purple" label="METADATA FIRST" />
-        </div>
-
         {!renderMode && (
-          <section className="hero-grid" aria-label="Trip recap introduction">
-            <Stack gap={4} className="hero-copy">
-              <Text as="p" type="label" className="eyebrow">THE SHORT VERSION</Text>
-              <Heading level={2}>Upload once. Inspect the evidence. Press play.</Heading>
-              <Text as="p" type="body" color="secondary">
-                GPS observations stay distinct from the roads inferred between them. Missing metadata stays missing — never quietly invented.
+          <header className="workspace-header">
+            <a className="workspace-back" href="/">← INTRO</a>
+            <div className="workspace-header-copy">
+              <Text as="p" type="label" className="eyebrow">TRIP RECAP / WORKSPACE</Text>
+              <Heading level={1}>Build the recap.</Heading>
+              <Text as="p" type="supporting" color="secondary">
+                Retain the evidence, set the route context, and inspect what the camera actually saw.
               </Text>
-              <div className="hero-note">
-                <span className="hero-note-number">01</span>
-                <Text as="p" type="supporting">Your files upload in parallel and can be discarded before analysis.</Text>
-              </div>
-            </Stack>
-            <Card variant="purple" padding={5} className="workflow-card">
-              <Stack gap={3}>
-                <Text as="p" type="label" className="eyebrow">WORKFLOW / 01—04</Text>
-                <div className="workflow-line"><span>01</span><Text type="body">retain media</Text></div>
-                <div className="workflow-line"><span>02</span><Text type="body">extract metadata</Text></div>
-                <div className="workflow-line"><span>03</span><Text type="body">trace the road</Text></div>
-                <div className="workflow-line"><span>04</span><Text type="body">replay the day</Text></div>
-              </Stack>
-            </Card>
-          </section>
+            </div>
+            <Badge variant="purple" label="TEMPORARY" />
+          </header>
         )}
 
         {!renderMode && (

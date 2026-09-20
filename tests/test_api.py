@@ -11,10 +11,19 @@ def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_root_serves_next_trip_ui() -> None:
+def test_root_serves_intro_page() -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "Make a trip out of the camera roll." in response.text
+    assert "Start a recap" in response.text
+    assert 'href="/recap"' in response.text
+    assert 'id="upload-card"' not in response.text
+    assert "/_next/static/" in response.text
+
+
+def test_recap_serves_workspace_page() -> None:
+    response = client.get("/recap")
+    assert response.status_code == 200
     assert "Determine route from retained media" in response.text
     assert 'id="upload-card"' in response.text
     assert 'id="drop-zone"' in response.text
@@ -24,14 +33,13 @@ def test_root_serves_next_trip_ui() -> None:
     assert 'id="vehicle"' in response.text
     assert 'role="combobox"' in response.text
     assert 'id="place-detail"' in response.text
-    assert "/_next/static/" in response.text
 
 
-def test_preview_alias_serves_next_trip_ui() -> None:
+def test_preview_alias_serves_workspace_page() -> None:
     response = client.get("/preview")
     assert response.status_code == 200
-    assert "Make a trip out of the camera roll." in response.text
-    assert 'id="result"' not in response.text
+    assert "Determine route from retained media" in response.text
+    assert 'id="upload-card"' in response.text
 
 
 def test_favicon_is_served() -> None:
