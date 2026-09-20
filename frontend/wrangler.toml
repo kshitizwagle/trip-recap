@@ -1,4 +1,4 @@
-compatibility_date = 2026-09-18
+compatibility_date = "2026-09-18"
 
 [vars]
 NEXT_PUBLIC_API_BASE_URL = "https://trip-recap.kshitizwagle.com.np"
