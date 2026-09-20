@@ -85,6 +85,16 @@ function vehicleLabel(value: Vehicle): string {
   return labels[value];
 }
 
+function placeDetailLabel(value: PlaceDetail): string {
+  const labels: Record<PlaceDetail, string> = {
+    specific: "Specific",
+    neighborhood: "Neighborhood",
+    city: "City / Town",
+    region: "Region",
+  };
+  return labels[value];
+}
+
 export default function TripRecapPage() {
   const mapRef = useRef<MapPreviewHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -346,7 +356,7 @@ export default function TripRecapPage() {
 
   return (
     <AppShell height="auto" contentPadding={0} variant="section" className={`trip-app ${renderClass}`}>
-      <div className="trip-page">
+      <div className="trip-page workspace-page">
         {!renderMode && (
           <header className="workspace-header">
             <a className="workspace-back" href="/">← INTRO</a>
@@ -361,11 +371,11 @@ export default function TripRecapPage() {
           </header>
         )}
 
-        {!renderMode && (
+        {!renderMode && !trip && (
           <section id="upload-card" className="upload-section" aria-labelledby="upload-title">
             <div className="section-rail"><Text as="p" type="label" className="eyebrow">01 / INTAKE</Text><Text as="p" type="supporting">Original files only</Text></div>
             <Card padding={5} className="upload-card-body">
-              <Stack gap={4}>
+              <Stack gap={4} className="upload-card-content">
                 <Stack direction="horizontal" hAlign="between" vAlign="end" gap={4} wrap="wrap">
                   <div>
                     <Heading level={2} id="upload-title">Drop the trip here.</Heading>
@@ -427,7 +437,10 @@ export default function TripRecapPage() {
                     <Heading level={2} id="result-title">The road between the frames.</Heading>
                     <Text id="trip-status" as="p" type="supporting" color="secondary">{trip.summary.gps_media_count} geotagged media · {trip.summary.stop_count} observed points · {trip.route ? "OSRM road routing" : "straight GPS fallback"}</Text>
                   </div>
-                  <Badge label={trip.route ? "INFERRED ROAD" : "GPS FALLBACK"} variant={trip.route ? "success" : "warning"} />
+                  <Stack direction="horizontal" hAlign="end" vAlign="center" gap={2} wrap="wrap">
+                    <Badge label={trip.route ? "INFERRED ROAD" : "GPS FALLBACK"} variant={trip.route ? "success" : "warning"} />
+                    <Button id="edit-inputs" label="Edit intake" variant="ghost" size="sm" onClick={clearResult} />
+                  </Stack>
                 </Stack>
                 {trip.route_error && <Text as="p" type="supporting" className="status-error">Routing note: {trip.route_error}</Text>}
               </div>
@@ -448,6 +461,7 @@ export default function TripRecapPage() {
                     <Selector id="playback-speed" label="Playback speed" isLabelHidden options={["0.5×", "1×", "1.5×", "2×", "3×"]} value={`${playbackSpeed}×`} onChange={(value) => setPlaybackSpeed(value.replace("×", ""))} size="sm" variant="ghost" />
                     <CheckboxInput id="slow-points" label="Slow at image points" value={slowPoints} onChange={setSlowPoints} size="sm" />
                     <Selector id="map-style" label="Map style" isLabelHidden options={[...MAP_STYLES]} value={mapStyle} onChange={(value) => setMapStyle(value as MapStyle)} size="sm" variant="ghost" />
+                    {trip && <Selector id="place-detail" label="Place-name detail" isLabelHidden options={PLACE_DETAILS.map(placeDetailLabel)} value={placeDetailLabel(placeDetail)} onChange={(value) => setPlaceDetail(PLACE_DETAILS.find((item) => placeDetailLabel(item) === value) ?? "neighborhood")} size="sm" variant="ghost" />}
                     <Button id="fit" label="Fit route" variant="secondary" size="sm" onClick={() => mapRef.current?.fitRoute(500)} />
                     <Button id="render" label={rendering ? "Rendering…" : "Export MP4"} variant="secondary" size="sm" isDisabled={rendering} isLoading={rendering} onClick={requestRender} />
                     {videoHref && <Button id="video-download" label="Download MP4" href={videoHref} variant="ghost" size="sm" />}

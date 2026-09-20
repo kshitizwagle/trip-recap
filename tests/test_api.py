@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.api.app import api
 
 client = TestClient(api)
@@ -47,12 +48,44 @@ def test_preview_alias_serves_workspace_page() -> None:
 def test_docker_frontend_build_includes_workspace_route() -> None:
     dockerfile = (Path(__file__).parents[1] / "Dockerfile").read_text()
     assert "COPY app/recap ./app/recap" in dockerfile
+    assert "COPY app/icon.svg ./app/icon.svg" in dockerfile
+
+
+def test_result_toolbar_exposes_place_detail_control() -> None:
+    source = (Path(__file__).parents[1] / "src/components/trip-recap/TripRecapPage.tsx").read_text()
+    toolbar = source.split('id="map-controls"', 1)[1]
+    assert 'id="place-detail"' in toolbar
 
 
 def test_favicon_is_served() -> None:
     response = client.get("/favicon.png")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/png")
+
+
+def test_app_icon_is_served() -> None:
+    response = client.get("/icon.svg")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/svg+xml")
+
+
+def test_render_uses_internal_preview_url(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    monkeypatch.setattr("app.api.app._trip_or_404", lambda trip_id: object())
+    monkeypatch.setattr(
+        "app.api.app.render_service.create_job",
+        lambda trip_id: "render-id",
+    )
+
+    async def fake_run(render_id: str, trip_id: str, preview_url: str) -> None:
+        captured["preview_url"] = preview_url
+
+    monkeypatch.setattr("app.api.app.render_service.run", fake_run)
+    response = client.post("/api/trips/trip-id/render")
+
+    assert response.status_code == 202
+    assert captured["preview_url"] == settings.render_preview_url
 
 
 def test_public_health() -> None:

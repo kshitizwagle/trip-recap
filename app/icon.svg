@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>Trip Recap</title>
+  <rect width="64" height="64" rx="14" fill="#171321"/>
+  <path d="M14 45c8-18 12-25 21-25 6 0 8 5 15 5" fill="none" stroke="#b9f6dd" stroke-linecap="round" stroke-width="5"/>
+  <circle cx="14" cy="45" r="6" fill="#a78bfa"/>
+  <circle cx="50" cy="25" r="6" fill="#f5a76f"/>
+  <circle cx="35" cy="20" r="3.5" fill="#f4f0ea"/>
+</svg>

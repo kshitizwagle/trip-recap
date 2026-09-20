@@ -27,6 +27,10 @@ class Settings:
     )
     render_max_seconds: float = float(os.environ.get("TRIP_RECAP_RENDER_MAX_SECONDS", "90"))
     render_fps: int = int(os.environ.get("TRIP_RECAP_RENDER_FPS", "30"))
+    render_preview_url: str = os.environ.get(
+        "TRIP_RECAP_RENDER_PREVIEW_URL",
+        f"http://127.0.0.1:{os.environ.get('PORT', '8000')}/preview",
+    )
 
 
 settings = Settings()

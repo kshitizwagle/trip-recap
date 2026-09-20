@@ -8,7 +8,7 @@ import "../src/app/globals.css";
 export const metadata: Metadata = {
   title: "Trip Recap — Camera roll to route",
   description: "Reconstruct a trip from the metadata already inside your photos and videos.",
-  icons: {icon: "/favicon.png"},
+  icons: {icon: "/icon.svg"},
 };
 
 export default function RootLayout({children}: {children: ReactNode}) {

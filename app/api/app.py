@@ -17,7 +17,6 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
-    Request,
     UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
@@ -50,6 +49,7 @@ FAVICON_PATH = (
     if (EXPORTED_WEB_DIR / "favicon.png").exists()
     else LEGACY_WEB_DIR / "favicon.png"
 )
+ICON_PATH = PROJECT_DIR / "app" / "icon.svg"
 PLACE_GRANULARITIES = {"specific", "neighborhood", "city", "region"}
 IMAGE_PREVIEW_MAX_EDGE = 1920
 IMAGE_PREVIEW_QUALITY = 82
@@ -379,6 +379,11 @@ async def preview() -> str:
 @api.get("/favicon.ico", include_in_schema=False)
 async def favicon() -> FileResponse:
     return FileResponse(FAVICON_PATH, media_type="image/png")
+
+
+@api.get("/icon.svg", include_in_schema=False)
+async def icon() -> FileResponse:
+    return FileResponse(ICON_PATH, media_type="image/svg+xml")
 
 
 @api.get("/health")
@@ -1041,7 +1046,6 @@ async def get_media_preview(
 @api.post("/api/trips/{trip_id}/render", status_code=202)
 async def create_render(
     trip_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
 ) -> dict:
     _trip_or_404(trip_id)
@@ -1050,7 +1054,7 @@ async def create_render(
         render_service.run,
         render_id,
         trip_id,
-        str(request.url_for("preview")),
+        settings.render_preview_url,
     )
     return {
         "id": render_id,

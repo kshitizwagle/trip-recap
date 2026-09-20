@@ -6,6 +6,7 @@ services:
     environment:
       PORT: "8000"
       TRIP_RECAP_DATA_DIR: /tmp/trip-recap
+      TRIP_RECAP_RENDER_PREVIEW_URL: http://127.0.0.1:8000/preview
     ports:
       - "8000:8000"
 
