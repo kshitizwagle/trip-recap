@@ -9,6 +9,7 @@ RUN npm ci --ignore-scripts
 COPY next.config.ts tsconfig.json next-env.d.ts ./
 COPY src ./src
 COPY app/layout.tsx app/page.tsx ./app/
+COPY app/recap ./app/recap
 
 RUN npm run build
 

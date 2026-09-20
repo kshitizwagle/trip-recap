@@ -206,6 +206,7 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 .drop-zone-shell [class*="dropzone"] > * { z-index: 1; }
 .drop-zone-shell label { color: var(--trip-fg); font-weight: 600; }
 .drop-zone-shell p { color: var(--trip-muted); }
+.drop-zone-shell .astryx-input-clear-button { display: none !important; }
 
 .drop-zone-caption {
   display: flex;

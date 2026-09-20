@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.api.app import api
@@ -40,6 +42,11 @@ def test_preview_alias_serves_workspace_page() -> None:
     assert response.status_code == 200
     assert "Determine route from retained media" in response.text
     assert 'id="upload-card"' in response.text
+
+
+def test_docker_frontend_build_includes_workspace_route() -> None:
+    dockerfile = (Path(__file__).parents[1] / "Dockerfile").read_text()
+    assert "COPY app/recap ./app/recap" in dockerfile
 
 
 def test_favicon_is_served() -> None:
