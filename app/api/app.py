@@ -21,6 +21,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
@@ -39,9 +40,15 @@ from app.trip.builder import TripBuilder, haversine_meters
 
 pillow_heif.register_heif_opener()
 
-WEB_DIR = Path(__file__).resolve().parents[1] / "web"
-WEB_INDEX = WEB_DIR / "index.html"
-FAVICON_PATH = WEB_DIR / "favicon.png"
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+EXPORTED_WEB_DIR = PROJECT_DIR / "out"
+LEGACY_WEB_DIR = PROJECT_DIR / "app" / "web"
+WEB_INDEX = EXPORTED_WEB_DIR / "index.html"
+FAVICON_PATH = (
+    EXPORTED_WEB_DIR / "favicon.png"
+    if (EXPORTED_WEB_DIR / "favicon.png").exists()
+    else LEGACY_WEB_DIR / "favicon.png"
+)
 PLACE_GRANULARITIES = {"specific", "neighborhood", "city", "region"}
 IMAGE_PREVIEW_MAX_EDGE = 1920
 IMAGE_PREVIEW_QUALITY = 82
@@ -51,6 +58,12 @@ api = FastAPI(
     version="0.3.0",
     description="Metadata-driven road-trip reconstruction and recap generation.",
 )
+if (EXPORTED_WEB_DIR / "_next").is_dir():
+    api.mount(
+        "/_next",
+        StaticFiles(directory=EXPORTED_WEB_DIR / "_next"),
+        name="next-assets",
+    )
 store = TripStore()
 render_service = RenderService(store)
 
@@ -336,7 +349,13 @@ def _route_progresses(route_model, observation_count: int) -> list[float]:
 
 
 def _web_html() -> str:
-    return WEB_INDEX.read_text(encoding="utf-8")
+    if WEB_INDEX.exists():
+        return WEB_INDEX.read_text(encoding="utf-8")
+    return """<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trip Recap</title></head>
+  <body class="trip-app"><main><h1>Trip Recap</h1><p data-frontend-build="required">Run npm run build before starting FastAPI.</p></main></body>
+</html>"""
 
 
 @api.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -359,6 +378,29 @@ async def favicon() -> FileResponse:
 @api.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@api.get("/api/locations/search")
+async def search_locations(
+    q: str = Query(..., min_length=2, max_length=120),
+    limit: int = Query(5, ge=1, le=5),
+) -> dict:
+    normalized = " ".join(q.split()).strip()
+    if len(normalized) < 2:
+        raise HTTPException(
+            status_code=422,
+            detail="Location query must contain at least 2 characters",
+        )
+
+    geocoder = NominatimReverseGeocoder(
+        store.root / "cache" / "places"
+    )
+    results = await asyncio.to_thread(
+        geocoder.search,
+        normalized,
+        limit,
+    )
+    return {"results": results}
 
 
 def _unique_target(directory: Path, filename: str) -> Path:

@@ -1,0 +1,33 @@
+{
+  "name": "trip-recap-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@astryxdesign/cli": "0.6.2",
+    "@astryxdesign/core": "0.6.2",
+    "@astryxdesign/theme-neutral": "0.6.2",
+    "@stylexjs/stylex": "^0.19.1",
+    "maplibre-gl": "^5.0.0",
+    "next": "^16.3.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "sonner": "^2.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "typescript": "^5.7.0"
+  },
+  "allowScripts": {
+    "@astryxdesign/core@0.6.2": true
+  },
+  "astryx": {
+    "theme": "neutral"
+  }
+}

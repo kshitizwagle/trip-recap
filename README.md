@@ -6,10 +6,10 @@ Upload original photos/videos and Trip Recap uses capture times and GPS metadata
 
 ## Current architecture
 
-The hosted app is now FastAPI end to end:
+The hosted app is now a Next.js + Astryx browser UI served by FastAPI:
 
 ```text
-browser UI served by FastAPI
+Next.js static browser UI served by FastAPI
 -> immediate concurrent per-file upload with discard support
 -> ExifTool metadata normalization in the container when route generation starts
 -> trip clustering and segmentation
@@ -37,6 +37,13 @@ uv python install 3.12
 uv sync --extra dev
 ```
 
+Install and build the browser UI:
+
+```bash
+npm install
+npm run build
+```
+
 The metadata pipeline currently also expects the `exiftool` executable. MP4 rendering expects Chromium and FFmpeg.
 
 Run:
@@ -45,6 +52,8 @@ Run:
 uv run fastapi dev
 ```
 
+For UI-only iteration, run `npm run dev` in a second terminal. The production-like flow above is the simplest way to test the FastAPI-served export.
+
 Then open:
 
 ```text
@@ -52,6 +61,14 @@ http://127.0.0.1:8000/
 ```
 
 API docs are available at `/docs`.
+
+Run both containers with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Open the frontend at `http://127.0.0.1:3000/`. Nginx serves the static Next.js export and proxies `/api` to FastAPI; the backend is also available directly at `http://127.0.0.1:8000/`.
 
 ## Docker
 

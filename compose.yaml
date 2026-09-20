@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: .
+      target: runtime
+    environment:
+      PORT: "8000"
+      TRIP_RECAP_DATA_DIR: /tmp/trip-recap
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"

@@ -260,8 +260,21 @@ class NominatimReverseGeocoder:
         if not normalized:
             return None
 
+        results = self.search(normalized, limit=1)
+        return results[0] if results else None
+
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+    ) -> list[dict[str, float | str | None]]:
+        normalized = " ".join(query.split()).strip()
+        if not normalized:
+            return []
+
+        safe_limit = max(1, min(limit, 5))
         cache_key = hashlib.sha256(
-            normalized.casefold().encode("utf-8")
+            f"{normalized.casefold()}:{safe_limit}".encode("utf-8")
         ).hexdigest()
         cache_path = self.cache_dir / f"search_en_{cache_key}.json"
 
@@ -286,7 +299,7 @@ class NominatimReverseGeocoder:
                         "q": normalized,
                         "format": "jsonv2",
                         "addressdetails": 1,
-                        "limit": 1,
+                        "limit": safe_limit,
                         "accept-language": "en",
                     },
                     headers={"User-Agent": self.user_agent},
@@ -303,18 +316,23 @@ class NominatimReverseGeocoder:
                 encoding="utf-8",
             )
 
-        if not payload:
-            return None
-
-        result = payload[0]
-        try:
-            latitude = float(result["lat"])
-            longitude = float(result["lon"])
-        except (KeyError, TypeError, ValueError):
-            return None
-
-        return {
-            "latitude": latitude,
-            "longitude": longitude,
-            "display_name": result.get("display_name"),
-        }
+        results: list[dict[str, float | str | None]] = []
+        for result in payload if isinstance(payload, list) else []:
+            try:
+                latitude = float(result["lat"])
+                longitude = float(result["lon"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            display_name = result.get("display_name")
+            results.append(
+                {
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "display_name": (
+                        display_name
+                        if isinstance(display_name, str)
+                        else None
+                    ),
+                }
+            )
+        return results

@@ -152,3 +152,72 @@ def test_forward_geocoder_returns_coordinates_and_caches(
     }
     assert second == first
     assert calls == 1
+
+
+def test_search_geocoder_returns_normalized_results_and_caches(
+    tmp_path: Path,
+) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        assert request.url.path == "/search"
+        assert request.url.params.get("q") == "Mahalaxmi"
+        assert request.url.params.get("limit") == "3"
+        assert request.url.params.get("format") == "jsonv2"
+        assert request.url.params.get("addressdetails") == "1"
+        assert request.url.params.get("accept-language") == "en"
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "lat": "27.6939",
+                    "lon": "85.3161",
+                    "display_name": "Mahalaxmi, Lalitpur, Nepal",
+                },
+                {
+                    "lat": "27.7000",
+                    "lon": "85.3200",
+                    "display_name": "Mahalaxmi Temple, Kathmandu, Nepal",
+                },
+                {
+                    "lat": "27.7100",
+                    "lon": "85.3300",
+                    "display_name": "Mahalaxmi Municipality, Nepal",
+                },
+            ],
+        )
+
+    with httpx.Client(
+        transport=httpx.MockTransport(handler)
+    ) as client:
+        geocoder = NominatimReverseGeocoder(
+            tmp_path,
+            base_url="https://nominatim.test",
+            min_interval_seconds=0,
+            client=client,
+        )
+        first = geocoder.search("  Mahalaxmi  ", limit=3)
+        second = geocoder.search("Mahalaxmi", limit=3)
+
+    expected = [
+        {
+            "latitude": 27.6939,
+            "longitude": 85.3161,
+            "display_name": "Mahalaxmi, Lalitpur, Nepal",
+        },
+        {
+            "latitude": 27.7,
+            "longitude": 85.32,
+            "display_name": "Mahalaxmi Temple, Kathmandu, Nepal",
+        },
+        {
+            "latitude": 27.71,
+            "longitude": 85.33,
+            "display_name": "Mahalaxmi Municipality, Nepal",
+        },
+    ]
+    assert first == expected
+    assert second == expected
+    assert calls == 1

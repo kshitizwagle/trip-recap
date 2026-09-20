@@ -2,7 +2,6 @@
 .github
 .venv
 .pytest_cache
-__pycache__
 *.py[cod]
 *.log
 .env
@@ -15,3 +14,7 @@ timeline.json
 *.mov
 *.heic
 *.heif
+.next
+node_modules
+out
+__pycache__

@@ -1,4 +1,26 @@
-# ---- Build stage ----
+# ---- Frontend build stage ----
+FROM node:22-bookworm-slim AS web-builder
+
+WORKDIR /web
+
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+
+COPY next.config.ts tsconfig.json next-env.d.ts ./
+COPY src ./src
+COPY app/layout.tsx app/page.tsx ./app/
+
+RUN npm run build
+
+
+# ---- Frontend runtime stage ----
+FROM nginx:1.27-alpine AS frontend
+
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=web-builder /web/out /usr/share/nginx/html
+
+
+# ---- Python build stage ----
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -15,6 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Copy the source and install the project itself.
 COPY . .
+COPY --from=web-builder /web/out ./out
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev

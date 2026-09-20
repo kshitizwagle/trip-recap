@@ -11,3 +11,9 @@ timeline.json
 *.mov
 *.heic
 *.heif
+.next/
+out/
+node_modules/
+tsconfig.tsbuildinfo
+# Added by code-review-graph
+.code-review-graph/
