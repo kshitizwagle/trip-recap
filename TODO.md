@@ -64,5 +64,12 @@
 - [ ] Add user-selectable 30/60/90 second output duration
 - [ ] Add audio/music only after the core renderer is stable
 
+## Separate deployment
+- [x] Consolidate the current Next.js UI in `frontend/` and Python API in `backend/`
+- [x] Configure cross-origin API, media, and MP4 download URLs
+- [x] Add an explicit backend CORS origin allowlist and external render-preview URL
+- [x] Document Cloudflare Pages and backend-only home-server deployment
+- [ ] Verify upload through the deployed Cloudflare hostname and MP4 export on the home server
+
 ## MVP success criteria
 A user can upload original trip photos/videos and, without entering coordinates or destinations, get normalized metadata, observations, an inferred route, a deterministic timeline, an animated browser preview, and a vertical MP4 recap.

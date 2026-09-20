@@ -7,8 +7,11 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     env:
-      PYTHONPATH: ${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -29,7 +32,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run typecheck
       - run: npm run build
-      - run: test -f out/maplibre/maplibre-gl-worker.mjs
-      - run: test -f out/maplibre/maplibre-gl-shared.mjs
+      - run: test -f out/recap.html && test -f out/icon.svg

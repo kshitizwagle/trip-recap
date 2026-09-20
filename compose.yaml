@@ -1,21 +1,14 @@
 services:
   backend:
     build:
-      context: .
+      context: ./backend
       target: runtime
     environment:
       PORT: "8000"
       TRIP_RECAP_DATA_DIR: /tmp/trip-recap
-      TRIP_RECAP_RENDER_PREVIEW_URL: http://127.0.0.1:8000/preview
+      TRIP_RECAP_CORS_ORIGINS: ${TRIP_RECAP_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://host.docker.internal:3000}
+      TRIP_RECAP_RENDER_PREVIEW_URL: ${TRIP_RECAP_RENDER_PREVIEW_URL:-http://host.docker.internal:3000/recap}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000"
-
-  frontend:
-    build:
-      context: .
-      target: frontend
-    depends_on:
-      backend:
-        condition: service_healthy
-    ports:
-      - "3000:80"
+      - "127.0.0.1:8000:8000"

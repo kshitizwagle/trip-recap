@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Settings:
+    cors_origins: tuple[str, ...] = tuple(
+        origin.strip() for origin in os.environ.get(
+            "TRIP_RECAP_CORS_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000",
+        ).split(",") if origin.strip()
+    )
+    max_files: int = int(os.environ.get("TRIP_RECAP_MAX_FILES", "100"))
+    max_file_bytes: int = min(
+        int(
+            os.environ.get(
+                "TRIP_RECAP_MAX_FILE_BYTES",
+                str(25 * 1024 * 1024),
+            )
+        ),
+        25 * 1024 * 1024,
+    )
+    data_ttl_seconds: int = int(os.environ.get("TRIP_RECAP_DATA_TTL_SECONDS", "3600"))
+    route_timeout_seconds: float = float(os.environ.get("TRIP_RECAP_ROUTE_TIMEOUT_SECONDS", "20"))
+    route_attempts: int = int(os.environ.get("TRIP_RECAP_ROUTE_ATTEMPTS", "3"))
+    min_route_point_distance_meters: float = float(
+        os.environ.get(
+            "TRIP_RECAP_MIN_ROUTE_POINT_DISTANCE_METERS",
+            "50",
+        )
+    )
+    render_max_seconds: float = float(os.environ.get("TRIP_RECAP_RENDER_MAX_SECONDS", "90"))
+    render_fps: int = int(os.environ.get("TRIP_RECAP_RENDER_FPS", "30"))
+    render_preview_url: str = os.environ.get(
+        "TRIP_RECAP_RENDER_PREVIEW_URL",
+        "http://localhost:3000/recap",
+    )
+
+
+settings = Settings()

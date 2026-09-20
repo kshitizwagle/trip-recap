@@ -1,24 +1,34 @@
 {
-  "name": "trip-recap-frontend",
+  "name": "trip-recap-web",
   "private": true,
-  "version": "0.1.0",
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "prebuild": "node ./scripts/copy-maplibre-worker.mjs",
-    "predev": "node ./scripts/copy-maplibre-worker.mjs"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts"
   },
   "dependencies": {
-    "maplibre-gl": "6.10.0",
-    "next": "16.3.5",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "sonner": "2.0.8"
+    "@astryxdesign/cli": "0.6.2",
+    "@astryxdesign/core": "0.6.2",
+    "@astryxdesign/theme-neutral": "0.6.2",
+    "@stylexjs/stylex": "^0.19.1",
+    "maplibre-gl": "^5.0.0",
+    "next": "^16.3.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "sonner": "^2.0.8"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "typescript": "^5.9.0"
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "typescript": "^5.7.0"
+  },
+  "allowScripts": {
+    "@astryxdesign/core@0.6.2": true
+  },
+  "astryx": {
+    "theme": "neutral"
   }
 }
