@@ -1,0 +1,3 @@
+[vars]
+NEXT_PUBLIC_API_BASE_URL = "https://trip-recap.kshitizwagle.com.np"
+NODE_VERSION = "22"
