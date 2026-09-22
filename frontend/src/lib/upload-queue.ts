@@ -34,6 +34,13 @@ export function partitionFiles<T extends FileLike>(
 export function canAnalyze(
   records: readonly Pick<UploadRecord, "status" | "discarded">[],
 ): boolean {
-  const retained = records.filter((record) => !record.discarded);
-  return retained.length > 0 && retained.every((record) => record.status === "uploaded");
+  const hasReadyUpload = records.some(
+    (record) => !record.discarded && record.status === "uploaded",
+  );
+  const hasPendingUpload = records.some(
+    (record) =>
+      !record.discarded &&
+      (record.status === "queued" || record.status === "uploading"),
+  );
+  return hasReadyUpload && !hasPendingUpload;
 }

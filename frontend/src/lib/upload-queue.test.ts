@@ -27,3 +27,17 @@ test("does not allow analysis while a retained upload is pending", () => {
     true,
   );
 });
+
+test("allows analysis when a retained upload failed but another is ready", () => {
+  assert.equal(
+    canAnalyze([
+      {status: "uploaded", discarded: false},
+      {status: "failed", discarded: false},
+    ]),
+    true,
+  );
+  assert.equal(
+    canAnalyze([{status: "failed", discarded: false}]),
+    false,
+  );
+});
