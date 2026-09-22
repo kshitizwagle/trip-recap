@@ -455,3 +455,60 @@ pre { max-height: 460px; margin: 0; overflow: auto; padding: 14px; border: 1px s
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* Recap editor: fixed desktop workspace, stacked mobile controls and preview. */
+.recap-editor { background: var(--color-background-body); color: var(--color-text-primary); font-family: var(--font-family-body); }
+.editor-shell { height: 100dvh; min-height: 0; }
+.editor-header { flex: 0 0 auto; border-bottom: var(--border-width) solid var(--color-border); background: var(--color-background-body); }
+.editor-header h1 { font-size: var(--font-size-lg); letter-spacing: normal; }
+.editor-header-label { border-left: var(--border-width) solid var(--color-border); padding-left: var(--spacing-4); }
+.editor-logo { background: var(--color-accent); color: var(--color-on-accent); border-radius: var(--radius-element); padding: var(--spacing-1) var(--spacing-2); font-size: var(--font-size-xl); }
+.editor-body { flex: 1; min-height: 0; }
+.editor-sidebar { flex: 0 0 calc(var(--spacing-12) * 8); min-width: 0; background: var(--color-background-surface); border-right: var(--border-width) solid var(--color-border); }
+.editor-settings { flex: 1; min-height: 0; }
+.editor-settings [hidden] { display: none; }
+.editor-settings h2 { font-size: var(--font-size-xl); letter-spacing: normal; }
+.editor-note { border: var(--border-width) solid var(--color-border); border-radius: var(--radius-container); background: var(--color-background-muted); }
+.editor-sidebar-footer { border-top: var(--border-width) solid var(--color-border); }
+.editor-sidebar-footer #status:empty { display: none; }
+.editor-preview { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; background: radial-gradient(ellipse at top, var(--color-background-muted), var(--color-background-body)); }
+.editor-stage { flex: 1 0 auto; min-height: 55vh; position: relative; overflow: hidden; border: var(--border-width) solid var(--color-border); border-radius: var(--radius-container); background: var(--color-background-muted); box-shadow: var(--shadow-low); }
+.editor-stage .map-frame { position: absolute; inset: 0; height: 100%; min-height: 0; }
+.editor-empty { position: absolute; inset: 0; }
+.editor-empty-icon { color: var(--color-text-accent); font-size: var(--font-size-5xl); background: var(--color-accent-muted); border-radius: var(--radius-full); padding: var(--spacing-2) var(--spacing-5); }
+.editor-empty h2 { font-size: var(--font-size-xl); }
+.editor-details { border-top: var(--border-width) solid var(--color-border); padding-top: var(--spacing-3); font-size: var(--font-size-sm); }
+.editor-details summary { cursor: pointer; color: var(--color-text-secondary); }
+.editor-details pre { max-height: 30vh; overflow: auto; background: var(--color-background-body); padding: var(--spacing-3); }
+.editor-details th, .editor-details td { padding: var(--spacing-2); border-bottom: var(--border-width) solid var(--color-border); font-size: var(--font-size-sm); text-align: start; }
+.editor-stops { list-style: none; margin: 0; padding: 0; }
+.editor-stops li + li { border-top: var(--border-width) solid var(--color-border); }
+.recap-editor .text-control { gap: var(--spacing-2); font: inherit; letter-spacing: normal; color: var(--color-text-primary); }
+.recap-editor .text-control > span { font: inherit; letter-spacing: normal; }
+.recap-editor .text-control input { background: var(--color-background-body); color: var(--color-text-primary); border: var(--border-width) solid var(--color-border-emphasized); border-radius: var(--radius-element); padding: var(--spacing-3); font: inherit; }
+.recap-editor .location-suggestions { background: var(--color-background-surface); border-color: var(--color-border-emphasized); color: var(--color-text-primary); }
+.recap-editor .location-suggestion-name { color: var(--color-text-primary); }
+.recap-editor .location-suggestion-coordinates { color: var(--color-text-secondary); }
+.recap-editor .status-error { color: var(--color-text-red); }
+.recap-editor .status-success { color: var(--color-text-teal); }
+.recap-editor.render-only .editor-preview { padding: 0; overflow: hidden; }
+.recap-editor.render-only .editor-stage { border: 0; border-radius: 0; height: 100dvh; }
+@media (max-width: 48rem) {
+  .editor-shell { height: auto; min-height: 100dvh; }
+  .editor-header-label { display: none; }
+  .editor-body { flex-direction: column; }
+  .editor-sidebar { flex-basis: auto; border-right: 0; border-bottom: var(--border-width) solid var(--color-border); }
+  .editor-settings { max-height: 50dvh; }
+  .editor-preview { overflow: visible; padding: var(--spacing-4); }
+  .editor-stage { min-height: 55dvh; }
+  .editor-empty { padding: var(--spacing-4); }
+  .editor-empty > :last-child { font-size: var(--font-size-sm); text-align: center; }
+}
+
+.editor-media-list { list-style: none; margin: 0; padding: 0; }
+.editor-media-row + .editor-media-row { border-top: var(--border-width) solid var(--color-border); }
+.editor-media-thumb { flex: 0 0 var(--spacing-12); height: var(--spacing-12); overflow: hidden; border-radius: var(--radius-element); background: var(--color-background-muted); }
+.editor-media-thumb img, .editor-media-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.editor-media-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.editor-media-copy .astryx-token { align-self: flex-start; }
