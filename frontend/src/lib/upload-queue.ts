@@ -44,3 +44,9 @@ export function canAnalyze(
   );
   return hasReadyUpload && !hasPendingUpload;
 }
+
+export function resetUploadForRetry(
+  record: Pick<UploadRecord, "status" | "progress" | "message">,
+): Pick<UploadRecord, "status" | "progress" | "message"> {
+  return {...record, status: "queued", progress: 0, message: "Queued"};
+}

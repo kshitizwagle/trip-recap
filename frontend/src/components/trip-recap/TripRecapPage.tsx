@@ -36,6 +36,7 @@ import {
   MAX_CONCURRENT_UPLOADS,
   canAnalyze,
   partitionFiles,
+  resetUploadForRetry,
 } from "@/lib/upload-queue";
 import type {RenderJob, TripData} from "@/lib/trip-types";
 
@@ -191,6 +192,20 @@ export default function TripRecapPage() {
       .slice(0, slots)
       .forEach(startUpload);
   }, [records, sessionId, startUpload]);
+
+  const retryRecord = useCallback(
+    (record: MediaUploadRecord) => {
+      activeUploadsRef.current.delete(record.clientId);
+      clearResult();
+      updateRecord(setRecords, record.clientId, {
+        ...resetUploadForRetry(record),
+        request: undefined,
+      });
+      setStatus("");
+      setStatusTone("neutral");
+    },
+    [clearResult],
+  );
 
   const handleFiles = useCallback(
     (value: File | File[] | null) => {
@@ -388,8 +403,8 @@ export default function TripRecapPage() {
                       <Heading level={2}>Every trip starts with a memory.</Heading>
                       <Text color="secondary">Add your original photos and videos. Their GPS and capture times bring your journey to life.</Text>
                     </Stack>
-                    <FileInput isDisabled={analyzing || rendering} ref={fileInputRef} label="Trip photos and videos" isLabelHidden value={records.map((record) => record.file)} onChange={handleFiles} accept={ACCEPTED_MEDIA} isMultiple mode="dropzone" placeholder="Drop or choose your media" description="JPG, HEIC, PNG, MOV & MP4 · up to 25 MB each" />
-                    <MediaQueue records={records} onDiscard={discardRecord} isDisabled={analyzing || rendering} />
+                    <FileInput className="editor-upload-input" isDisabled={analyzing || rendering} ref={fileInputRef} label="Trip photos and videos" isLabelHidden value={null} onChange={handleFiles} accept={ACCEPTED_MEDIA} isMultiple mode="dropzone" placeholder="Drop or choose more media" description="JPG, HEIC, PNG, MOV & MP4 · up to 25 MB each" />
+                    <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={analyzing || rendering} />
                     <Stack className="editor-note" padding={4} gap={2}>
                       <Text weight="medium">Your camera roll knows the way</Text>
                       <Text type="supporting">No need to enter destinations. Missing GPS or capture times stay unknown. Roads between recorded points are inferred.</Text>

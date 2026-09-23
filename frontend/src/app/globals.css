@@ -487,6 +487,7 @@ pre { max-height: 460px; margin: 0; overflow: auto; padding: 14px; border: 1px s
 .recap-editor .text-control { gap: var(--spacing-2); font: inherit; letter-spacing: normal; color: var(--color-text-primary); }
 .recap-editor .text-control > span { font: inherit; letter-spacing: normal; }
 .recap-editor .text-control input { background: var(--color-background-body); color: var(--color-text-primary); border: var(--border-width) solid var(--color-border-emphasized); border-radius: var(--radius-element); padding: var(--spacing-3); font: inherit; }
+.recap-editor .editor-upload-input { height: var(--spacing-24) !important; min-height: var(--spacing-24) !important; padding-block: var(--spacing-4) !important; }
 .recap-editor .location-suggestions { background: var(--color-background-surface); border-color: var(--color-border-emphasized); color: var(--color-text-primary); }
 .recap-editor .location-suggestion-name { color: var(--color-text-primary); }
 .recap-editor .location-suggestion-coordinates { color: var(--color-text-secondary); }

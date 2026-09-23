@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {MAX_FILE_BYTES, canAnalyze, partitionFiles} from "./upload-queue.ts";
+import {
+  MAX_FILE_BYTES,
+  canAnalyze,
+  partitionFiles,
+  resetUploadForRetry,
+} from "./upload-queue.ts";
 
 const file = (name: string, size: number) => ({name, size});
 
@@ -39,5 +44,12 @@ test("allows analysis when a retained upload failed but another is ready", () =>
   assert.equal(
     canAnalyze([{status: "failed", discarded: false}]),
     false,
+  );
+});
+
+test("resets a failed upload to queued state for retry", () => {
+  assert.deepEqual(
+    resetUploadForRetry({status: "failed", progress: 38, message: "Upload failed"}),
+    {status: "queued", progress: 0, message: "Queued"},
   );
 });

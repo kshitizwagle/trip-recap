@@ -12,6 +12,7 @@ export type MediaUploadRecord = UploadRecord<File> & {
 interface MediaQueueProps {
   records: MediaUploadRecord[];
   onDiscard: (record: MediaUploadRecord) => void;
+  onRetry: (record: MediaUploadRecord) => void;
   isDisabled?: boolean;
 }
 
@@ -37,7 +38,7 @@ function isVideo(record: MediaUploadRecord): boolean {
   return record.file.type.startsWith("video/") || /\.(mov|mp4|m4v)$/i.test(record.file.name);
 }
 
-export default function MediaQueue({records, onDiscard, isDisabled = false}: MediaQueueProps) {
+export default function MediaQueue({records, onDiscard, onRetry, isDisabled = false}: MediaQueueProps) {
   return (
     <Stack as="section" gap={3} id="media-grid" aria-label="Selected trip media" hidden={!records.length}>
       <Text weight="semibold">Your media · {records.length}</Text>
@@ -56,7 +57,10 @@ export default function MediaQueue({records, onDiscard, isDisabled = false}: Med
               <Text type="supporting">{humanSize(record.file.size)} · {statusLabel(record)}</Text>
               {record.status === "uploaded" ? <Token label="Ready" color="teal" size="sm" /> : <ProgressBar value={record.progress} label={`${record.file.name} upload progress`} isLabelHidden variant={record.status === "failed" ? "error" : "accent"} />}
             </Stack>
-            <Button isDisabled={isDisabled} label={`Discard ${record.file.name}`} icon={<Text aria-hidden="true">×</Text>} isIconOnly variant="ghost" size="sm" onClick={() => onDiscard(record)} />
+            <Stack direction="horizontal" gap={1} vAlign="center">
+              {record.status === "failed" && <Button isDisabled={isDisabled} label="Retry" variant="secondary" size="sm" onClick={() => onRetry(record)} />}
+              <Button isDisabled={isDisabled} label={`Discard ${record.file.name}`} icon={<Text aria-hidden="true">×</Text>} isIconOnly variant="ghost" size="sm" onClick={() => onDiscard(record)} />
+            </Stack>
           </Stack>
         ))}
       </Stack>
