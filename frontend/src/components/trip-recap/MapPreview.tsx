@@ -314,12 +314,12 @@ const MapPreview = forwardRef(function MapPreview(
         geometry: {type: "LineString" as const, coordinates},
       };
       map.addSource("route", {type: "geojson", data: routeFeature});
-      map.addLayer({id: "route", type: "line", source: "route", paint: {"line-color": "#9b8cb4", "line-width": 5, "line-opacity": 0.7}});
+      map.addLayer({id: "route", type: "line", source: "route", paint: {"line-color": "#8464c6", "line-width": 5, "line-opacity": 0.7}});
       map.addSource("traveled", {
         type: "geojson",
         data: {type: "Feature", properties: {}, geometry: {type: "LineString", coordinates: []}},
       });
-      map.addLayer({id: "traveled", type: "line", source: "traveled", paint: {"line-color": "#b9f6dd", "line-width": 7}});
+      map.addLayer({id: "traveled", type: "line", source: "traveled", paint: {"line-color": "#61ffca", "line-width": 7}});
 
       data.observations.forEach((observation) => {
         const wrapper = document.createElement("div");
