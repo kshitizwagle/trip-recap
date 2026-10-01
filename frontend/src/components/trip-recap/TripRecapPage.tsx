@@ -16,7 +16,7 @@ import {
   Token,
 } from "@astryxdesign/core";
 import {Theme} from "@astryxdesign/core/theme";
-import {recapEditorTheme} from "@/theme";
+import {tripRecapTheme} from "@/theme";
 import {Toaster, toast} from "sonner";
 import LocationAutocomplete from "@/components/trip-recap/LocationAutocomplete";
 import MapPreview, {type MapPreviewHandle} from "@/components/trip-recap/MapPreview";
@@ -373,7 +373,7 @@ export default function TripRecapPage() {
   );
 
   return (
-    <Theme theme={recapEditorTheme} mode="dark">
+    <Theme theme={tripRecapTheme} mode="dark">
       <AppShell height="auto" contentPadding={0} variant="section" className={`recap-editor ${renderMode ? "render-only" : ""}`}>
         <Stack className="editor-shell" gap={0}>
           {!renderMode && (
