@@ -1,0 +1,28 @@
+# Temporary: regenerates frontend/package-lock.json with access to GitHub Packages.
+name: lockfile-sync
+on:
+  push:
+    branches: [style/aura-dark-design-system]
+    paths: [.github/workflows/lockfile-sync.yml]
+permissions:
+  contents: write
+  packages: read
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: sync lockfile for @kshitizwagle/design" && git push || echo "lockfile unchanged"

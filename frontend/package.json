@@ -12,6 +12,7 @@
     "@astryxdesign/cli": "0.6.2",
     "@astryxdesign/core": "0.6.2",
     "@astryxdesign/theme-neutral": "0.6.2",
+    "@kshitizwagle/design": "^0.3.0",
     "@stylexjs/stylex": "^0.19.1",
     "maplibre-gl": "^5.0.0",
     "next": "^16.3.1",

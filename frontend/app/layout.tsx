@@ -1,5 +1,7 @@
 import "@astryxdesign/core/reset.css";
 import "@astryxdesign/core/astryx.css";
+import "@kshitizwagle/design/tokens.css";
+import {fontsHref} from "@kshitizwagle/design";
 import type {Metadata} from "next";
 import type {ReactNode} from "react";
 import TripTheme from "@/components/TripTheme";
@@ -17,10 +19,7 @@ export default function RootLayout({children}: {children: ReactNode}) {
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
-        />
+        <link rel="stylesheet" href={fontsHref} />
       </head>
       <body>
         <TripTheme>{children}</TripTheme>

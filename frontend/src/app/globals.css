@@ -1,29 +1,28 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 :root {
-  color-scheme: dark;
-  /* Aura Dark design system values; components get the same values via src/theme.ts. */
-  --trip-bg: #15141b;
-  --trip-bg-deep: #0f0e14;
-  --trip-surface: #1d1c25;
-  --trip-raised: #25242f;
-  --trip-fg: #edecee;
-  --trip-muted: #bdbdbd;
-  --trip-meta: #908f98;
-  --trip-border: #2e2c3a;
-  --trip-gray: #6d6d6d;
-  --trip-violet: #a277ff;
-  --trip-violet-tint: #3d375e;
-  --trip-selection: #3d375e7f;
-  --trip-mint: #61ffca;
-  --trip-orange: #ffca85;
-  --trip-danger: #ff6767;
-  --trip-danger-ink: #15141b;
-  --trip-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --trip-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --trip-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
-  --trip-shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.6);
-  --trip-shadow-focus: 0 0 0 3px rgba(162, 119, 255, 0.4);
+  /* App aliases for @kshitizwagle/design tokens (loaded in app/layout.tsx). */
+  --trip-bg: var(--ds-bg);
+  --trip-bg-deep: var(--ds-bg-deep);
+  --trip-surface: var(--ds-surface);
+  --trip-raised: var(--ds-surface-raised);
+  --trip-fg: var(--ds-fg);
+  --trip-muted: var(--ds-muted);
+  --trip-meta: var(--ds-metadata);
+  --trip-border: var(--ds-border);
+  --trip-gray: var(--ds-gray);
+  --trip-violet: var(--ds-accent);
+  --trip-violet-tint: var(--ds-accent-tint);
+  --trip-selection: var(--ds-selection);
+  --trip-mint: var(--ds-green);
+  --trip-orange: var(--ds-warning);
+  --trip-danger: var(--ds-danger);
+  --trip-danger-ink: var(--ds-danger-ink);
+  --trip-shadow-sm: var(--ds-shadow-sm);
+  --trip-shadow-md: var(--ds-shadow-md);
+  --trip-shadow-lg: var(--ds-shadow-lg);
+  --trip-shadow-xl: var(--ds-shadow-xl);
+  --trip-shadow-focus: var(--ds-shadow-focus);
 }
 
 * { box-sizing: border-box; }
@@ -35,7 +34,7 @@ body {
   margin: 0;
   background: var(--trip-bg);
   color: var(--trip-fg);
-  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+  font-family: var(--ds-font-mono);
 }
 
 button, input, select, textarea { font: inherit; }
@@ -117,7 +116,7 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
   border: 1px solid var(--trip-gray);
   border-radius: 50%;
   color: var(--trip-mint);
-  font: 700 12px/1 "IBM Plex Mono", monospace;
+  font: 700 12px/1 var(--ds-font-mono);
   letter-spacing: 0.04em;
 }
 
@@ -381,7 +380,7 @@ button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 @keyframes vehicle-bob { from { transform: translateY(0); } to { transform: translateY(-2px); } }
 .observation-marker { display: flex; gap: 6px; align-items: center; white-space: nowrap; pointer-events: none; }
 .observation-dot { width: 11px; height: 11px; flex: 0 0 auto; border: 3px solid var(--trip-bg); border-radius: 50%; background: var(--trip-mint); box-shadow: var(--trip-shadow-sm); }
-.place-label { max-width: 190px; overflow: hidden; padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--trip-fg) 15%, transparent); border-radius: 2px; background: color-mix(in srgb, var(--trip-bg-deep) 92%, transparent); color: var(--trip-fg); font: 600 10px/1.3 "IBM Plex Mono", monospace; text-overflow: ellipsis; }
+.place-label { max-width: 190px; overflow: hidden; padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--trip-fg) 15%, transparent); border-radius: 2px; background: color-mix(in srgb, var(--trip-bg-deep) 92%, transparent); color: var(--trip-fg); font: 600 10px/1.3 var(--ds-font-mono); text-overflow: ellipsis; }
 
 .media-overlay { position: absolute; z-index: 7; right: 22px; bottom: 22px; left: auto; display: none; max-width: min(82%, 680px); max-height: 42%; padding: 7px; border: 1px solid var(--trip-gray); border-radius: 3px; background: color-mix(in srgb, var(--trip-bg-deep) 94%, transparent); box-shadow: var(--trip-shadow-lg); }
 .media-overlay.is-visible { display: block; }
@@ -396,7 +395,7 @@ th, td { padding: 10px 8px; border-bottom: 1px solid var(--trip-border); text-al
 th { color: var(--trip-meta); font-size: 9px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; }
 td { color: var(--trip-muted); }
 .json-tabs, .download-row { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; }
-pre { max-height: 460px; margin: 0; overflow: auto; padding: 14px; border: 1px solid var(--trip-border); border-radius: 2px; background: var(--trip-bg-deep); color: var(--trip-mint); font: 11px/1.65 "IBM Plex Mono", monospace; white-space: pre-wrap; word-break: break-word; }
+pre { max-height: 460px; margin: 0; overflow: auto; padding: 14px; border: 1px solid var(--trip-border); border-radius: 2px; background: var(--trip-bg-deep); color: var(--trip-mint); font: 11px/1.65 var(--ds-font-mono); white-space: pre-wrap; word-break: break-word; }
 
 .trip-footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 12px; border-top: 1px solid var(--trip-border); }
 .trip-footer p:last-child { margin: 0; color: var(--trip-meta) !important; }
