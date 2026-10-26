@@ -2,31 +2,33 @@
 
 Trip Recap is a static site. There is nothing to run besides a static file host.
 
-## Cloudflare Pages
+## Cloudflare (Workers static assets)
 
-Connect this repository with these build settings:
+The repository is set up for Cloudflare Workers Builds:
 
 | Setting | Value |
 | --- | --- |
 | Root directory | `frontend` |
-| Framework | Next.js (Static HTML Export) |
 | Build command | `npm run build` |
-| Output directory | `out` |
+| Deploy command | `npx wrangler deploy --assets=./out` |
 | Node version | `22` (22.18 or newer) |
 | Environment variables | none |
 
-Pages serves `/` (the studio) and `/recap` (the same page, kept for older links).
+`frontend/wrangler.toml` serves `out/` as static assets, so `/` (the studio) and `/recap`
+(the same page, kept for older links) resolve to their HTML files.
 
-Or deploy from a machine with Wrangler:
+To deploy from a machine instead:
 
 ```sh
 cd frontend
 npm ci --ignore-scripts
 npm run build
-npx wrangler pages deploy out --project-name trip-recap
+npx wrangler deploy --assets=./out
 ```
 
-Any other static host works the same way: upload the contents of `frontend/out`.
+Cloudflare Pages or any other static host also works: publish the contents of `frontend/out`.
+Do not add `pages_build_output_dir` to `wrangler.toml` while deploying with `wrangler deploy`;
+it makes Wrangler treat the project as Pages and stop.
 
 ## External services
 
