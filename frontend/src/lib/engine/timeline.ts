@@ -2,6 +2,10 @@
 
 import type {MediaPoint, Observation, Timeline, TimelineEvent, Trip} from "./models.ts";
 import {timeMs} from "./models.ts";
+import {haversineMeters} from "./geo.ts";
+
+/** Assumed speed when stops are out of time order (reordered or added by hand). */
+export const FALLBACK_SPEED_KPH = 40;
 
 const ANCHORS: Array<[number, number]> = [
   [120, 1],
@@ -50,7 +54,12 @@ export class TimelineBuilder {
     for (let i = 1; i < observations.length; i += 1) {
       const previous = observations[i - 1];
       const current = observations[i];
-      const realGap = Math.max((timeMs(current.arrival) - timeMs(previous.departure)) / 1000, 0);
+      let realGap = (timeMs(current.arrival) - timeMs(previous.departure)) / 1000;
+      if (!(realGap > 0)) {
+        // No usable clock gap (same moment, or stops reordered/added by hand): estimate from distance.
+        const meters = haversineMeters(previous.latitude, previous.longitude, current.latitude, current.longitude);
+        realGap = meters > 1 ? Math.max(60, (meters / 1000 / FALLBACK_SPEED_KPH) * 3600) : 0;
+      }
       const moveDuration = compressGapSeconds(realGap);
       events.push({video_time: cursor, type: "location_departure", payload: {observation_id: previous.id}});
       events.push({
@@ -110,4 +119,60 @@ export function visibleMediaAt(timeline: Timeline, time: number): {mediaId: stri
     if (event.type === "media_hide" && visible?.mediaId === mediaId) visible = null;
   }
   return visible;
+}
+
+export interface PlaybackState {
+  /** 0..1 distance progress along the route. */
+  progress: number;
+  /** Index of the observation the traveller last reached (-1 before the first). */
+  atIndex: number;
+  /** Index of the observation being travelled to, or null while stopped. */
+  toIndex: number | null;
+  /** 0..1 eased progress through the current move. */
+  moveProgress: number;
+  /** "intro" before the first move, "move", "stop" at an observation, "outro" after the last arrival. */
+  phase: "intro" | "move" | "stop" | "outro";
+}
+
+export function easeInOutCubic(value: number): number {
+  const x = Math.max(0, Math.min(1, value));
+  return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
+}
+
+/**
+ * Where the traveller is at a timeline time. Moves ease between observation progresses during
+ * `move` events and hold still while media shows, so preview and export animate identically.
+ */
+export function playbackStateAt(
+  timeline: Timeline,
+  observations: Array<{id: string; progress: number}>,
+  time: number,
+): PlaybackState {
+  const index = new Map(observations.map((item, i) => [item.id, i]));
+  const progressOf = (id: unknown) => {
+    const i = typeof id === "string" ? index.get(id) : undefined;
+    return i === undefined ? null : Math.max(0, Math.min(1, observations[i].progress));
+  };
+  const moves = timeline.events.filter((event) => event.type === "move");
+  const lastOverview = [...timeline.events].reverse().find((event) => event.type === "camera_overview");
+  const endTime = moves.length && lastOverview ? lastOverview.video_time : Infinity;
+  let state: PlaybackState = {progress: 0, atIndex: observations.length ? 0 : -1, toIndex: null, moveProgress: 0, phase: "intro"};
+  if (!moves.length) return {...state, phase: time > 0 ? "stop" : "intro"};
+  if (time < moves[0].video_time) return state;
+
+  for (const move of moves) {
+    if (time < move.video_time) break;
+    const from = progressOf(move.payload.from_observation_id) ?? state.progress;
+    const to = progressOf(move.payload.to_observation_id) ?? from;
+    const duration = Math.max(Number(move.payload.duration_seconds) || 0, 0.001);
+    const toIndex = index.get(String(move.payload.to_observation_id)) ?? state.atIndex;
+    const fromIndex = index.get(String(move.payload.from_observation_id)) ?? state.atIndex;
+    const raw = (time - move.video_time) / duration;
+    if (raw < 1) {
+      const eased = easeInOutCubic(raw);
+      return {progress: from + (to - from) * eased, atIndex: fromIndex, toIndex, moveProgress: eased, phase: "move"};
+    }
+    state = {progress: to, atIndex: toIndex, toIndex: null, moveProgress: 1, phase: "stop"};
+  }
+  return time >= endTime ? {...state, phase: "outro"} : state;
 }

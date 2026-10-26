@@ -199,3 +199,57 @@ export function tripPayload(
     },
   };
 }
+
+/** A stop in a user-edited route: an existing observation, or a place the user added. */
+export type StopEdit =
+  | {kind: "observation"; id: string}
+  | {kind: "custom"; latitude: number; longitude: number; name: string};
+
+export function customStopId(latitude: number, longitude: number, name: string): string {
+  return uuid5(`custom:${latitude.toFixed(6)}:${longitude.toFixed(6)}:${name}`);
+}
+
+/**
+ * Rebuilds a trip with stops in a new order and/or with added places, then re-routes and
+ * re-times it. Added places carry no media and take their neighbour's time, so the timeline
+ * falls back to a distance-based move for them.
+ */
+export async function applyStopEdits(
+  analyzed: AnalyzedTrip,
+  stops: StopEdit[],
+  services: Pick<AnalyzeServices, "router">,
+): Promise<AnalyzedTrip> {
+  const byId = new Map(analyzed.trip.observations.map((item) => [item.id, item]));
+  const fallbackTime = analyzed.trip.started_at ?? analyzed.trip.observations[0]?.arrival ?? new Date().toISOString();
+  const observations: Observation[] = [];
+  for (const stop of stops) {
+    if (stop.kind === "observation") {
+      const existing = byId.get(stop.id);
+      if (existing) observations.push(existing);
+      continue;
+    }
+    if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) continue;
+    const when = observations[observations.length - 1]?.departure ?? fallbackTime;
+    observations.push({
+      id: customStopId(stop.latitude, stop.longitude, stop.name),
+      arrival: when,
+      departure: when,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+      media_ids: [],
+    });
+  }
+  const trip: Trip = {...analyzed.trip, observations, stats: {...analyzed.trip.stats}};
+  trip.stats.distance_meters = observationDistance(observations);
+  let route: Route | null = null;
+  let routeError: string | null = null;
+  if (observations.length >= 2) {
+    try {
+      route = await buildRoute(trip, services.router);
+    } catch (error) {
+      routeError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const timeline = new TimelineBuilder().build(trip);
+  return {trip, route, timeline, routeError};
+}

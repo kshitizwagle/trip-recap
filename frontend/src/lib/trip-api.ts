@@ -2,15 +2,21 @@
 // leave the device: metadata is read locally, OSRM and Nominatim are called directly, and media URLs
 // are object URLs that live only as long as the tab.
 
-import {analyzeMedia, type AnalyzedTrip, tripPayload} from "./engine/analyze.ts";
+import {analyzeMedia, applyStopEdits, type AnalyzedTrip, customStopId, resolveLocation, type StopEdit, tripPayload} from "./engine/analyze.ts";
 import {randomId} from "./engine/ids.ts";
 import {extension, extractMetadata, SUPPORTED_EXTENSIONS} from "./engine/metadata/extract.ts";
 import type {MediaPoint} from "./engine/models.ts";
-import {type LocationSuggestion, NominatimGeocoder, PLACE_GRANULARITIES, type PlaceGranularity} from "./engine/places.ts";
+import {type LocationSuggestion, NominatimGeocoder, PhotonGeocoder, PLACE_GRANULARITIES, type PlaceGranularity} from "./engine/places.ts";
 import {OSRMRouter, RouteCache} from "./engine/routing.ts";
 import type {AnalyzeSessionPayload, AnalyzeSessionResponse, TripData, UploadedMedia} from "./trip-types";
 
 export type {LocationSuggestion};
+
+export const PLACE_PENDING = "Looking up…";
+export const PLACE_UNKNOWN = "Unknown place";
+
+/** A stop in the route editor: an existing point, or a place the user added by search. */
+export type RouteStopInput = {id: string} | {query: string; name?: string} | {latitude: number; longitude: number; name: string};
 
 export interface UploadRequest {
   promise: Promise<UploadedMedia>;
@@ -27,9 +33,12 @@ interface StoredMedia {
 interface StoredTrip {
   analyzed: AnalyzedTrip;
   places: Map<PlaceGranularity, Record<string, string>>;
+  /** Names the user typed or picked; they win over looked-up names at every granularity. */
+  customNames: Record<string, string>;
 }
 
 const geocoder = new NominatimGeocoder();
+const photon = new PhotonGeocoder();
 const router = new OSRMRouter({cache: new RouteCache()});
 const sessions = new Map<string, Map<string, StoredMedia>>();
 const trips = new Map<string, StoredTrip>();
@@ -52,7 +61,12 @@ function urlsFor(media: MediaPoint) {
 function payload(tripId: string, granularity: PlaceGranularity = "neighborhood"): TripData {
   const stored = trips.get(tripId);
   if (!stored) throw new Error("Trip not found. Trips live only in this browser tab; build the route again.");
-  return tripPayload(stored.analyzed, stored.places.get(granularity) ?? {}, urlsFor) as TripData;
+  const looked = stored.places.get(granularity) ?? {};
+  const places: Record<string, string> = {};
+  for (const observation of stored.analyzed.trip.observations) {
+    places[observation.id] = stored.customNames[observation.id] ?? looked[observation.id] ?? PLACE_PENDING;
+  }
+  return tripPayload(stored.analyzed, places, urlsFor) as TripData;
 }
 
 export function searchLocations(query: string, signal?: AbortSignal): Promise<{results: LocationSuggestion[]}> {
@@ -121,7 +135,7 @@ export async function analyzeSession(request: AnalyzeSessionPayload): Promise<An
     },
     {router, forwardGeocode: (query) => geocoder.forward(query)},
   );
-  for (const item of analyzed) trips.set(item.trip.id, {analyzed: item, places: new Map()});
+  for (const item of analyzed) trips.set(item.trip.id, {analyzed: item, places: new Map(), customNames: {}});
   return {trips: analyzed.map((item) => payload(item.trip.id))};
 }
 
@@ -129,24 +143,92 @@ export async function fetchTripData(tripId: string): Promise<TripData> {
   return payload(tripId);
 }
 
-export async function fetchPlaces(tripId: string, granularity: string): Promise<{places: Record<string, string>}> {
+async function lookUpPlace(latitude: number, longitude: number, level: PlaceGranularity): Promise<string> {
+  try {
+    const name = await geocoder.reverse(latitude, longitude, level);
+    if (name) return name;
+  } catch {
+    // Nominatim failed or rate-limited; Photon is the fallback.
+  }
+  try {
+    return (await photon.reverse(latitude, longitude, level)) ?? PLACE_UNKNOWN;
+  } catch {
+    return PLACE_UNKNOWN;
+  }
+}
+
+/**
+ * Looks up a name for every point at the given detail level. `onUpdate` receives the names found
+ * so far after each lookup, so labels fill in one by one instead of all at the end.
+ */
+export async function fetchPlaces(
+  tripId: string,
+  granularity: string,
+  onUpdate?: (places: Record<string, string>) => void,
+): Promise<{places: Record<string, string>}> {
   if (!PLACE_GRANULARITIES.includes(granularity as PlaceGranularity)) throw new Error("Invalid place granularity");
   const stored = trips.get(tripId);
   if (!stored) throw new Error("Trip not found");
   const level = granularity as PlaceGranularity;
-  const existing = stored.places.get(level);
-  const observations = stored.analyzed.trip.observations;
-  if (existing && observations.every((item) => item.id in existing)) return {places: existing};
-  const places: Record<string, string> = {};
-  for (const observation of observations) {
-    try {
-      places[observation.id] = (await geocoder.reverse(observation.latitude, observation.longitude, level)) ?? "Unknown place";
-    } catch {
-      places[observation.id] = "Unknown place";
+  const looked = {...(stored.places.get(level) ?? {})};
+  const merged = () => {
+    const out: Record<string, string> = {};
+    for (const observation of stored.analyzed.trip.observations) {
+      out[observation.id] = stored.customNames[observation.id] ?? looked[observation.id] ?? PLACE_PENDING;
+    }
+    return out;
+  };
+  for (const observation of stored.analyzed.trip.observations) {
+    if (looked[observation.id] || stored.customNames[observation.id]) continue;
+    looked[observation.id] = await lookUpPlace(observation.latitude, observation.longitude, level);
+    stored.places.set(level, {...looked});
+    onUpdate?.(merged());
+  }
+  stored.places.set(level, looked);
+  return {places: merged()};
+}
+
+/** Gives a point a name of the user's choosing; an empty name restores the looked-up one. */
+export async function renameStop(tripId: string, observationId: string, name: string): Promise<TripData> {
+  const stored = trips.get(tripId);
+  if (!stored) throw new Error("Trip not found");
+  const trimmed = name.trim();
+  if (trimmed) stored.customNames[observationId] = trimmed;
+  else delete stored.customNames[observationId];
+  return payload(tripId);
+}
+
+function shortName(displayName: string): string {
+  return displayName.split(",")[0]?.trim() || displayName.trim();
+}
+
+/**
+ * Re-orders the route and/or adds places, then re-routes and re-times the trip. Existing points
+ * are passed by id; new places by search text (resolved through Nominatim) or coordinates.
+ */
+export async function updateStops(tripId: string, stops: RouteStopInput[]): Promise<TripData> {
+  const stored = trips.get(tripId);
+  if (!stored) throw new Error("Trip not found");
+  const edits: StopEdit[] = [];
+  const names: Array<[string, string]> = [];
+  for (const stop of stops) {
+    if ("id" in stop) {
+      edits.push({kind: "observation", id: stop.id});
+    } else if ("query" in stop) {
+      const resolved = await resolveLocation(stop.query, {router, forwardGeocode: (query) => geocoder.forward(query)});
+      if (!resolved) throw new Error(`Could not find location: ${stop.query}`);
+      const name = stop.name?.trim() || shortName(stop.query);
+      names.push([customStopId(resolved[0], resolved[1], name), name]);
+      edits.push({kind: "custom", latitude: resolved[0], longitude: resolved[1], name});
+    } else {
+      names.push([customStopId(stop.latitude, stop.longitude, stop.name), stop.name]);
+      edits.push({kind: "custom", latitude: stop.latitude, longitude: stop.longitude, name: stop.name});
     }
   }
-  stored.places.set(level, places);
-  return {places};
+  const updated = await applyStopEdits(stored.analyzed, edits, {router});
+  for (const [id, name] of names) stored.customNames[id] = name;
+  stored.analyzed = updated;
+  return payload(tripId);
 }
 
 /** Original media for a trip, used by the in-browser MP4 export. */
