@@ -21,7 +21,7 @@ import {
   uploadMedia,
   type UploadRequest,
 } from "@/lib/trip-api";
-import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
+import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_MAX_SECONDS, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
 import {
   MAX_CONCURRENT_UPLOADS,
   MAX_FILE_LABEL,
@@ -379,7 +379,7 @@ export default function TripRecapPage() {
     setStatus("Rendering your recap in this browser…");
     setStatusTone("neutral");
     try {
-      const blob = await exportRecapVideo(trip, {vehicle, styleId, frame, quality, fps, signal: controller.signal, onProgress: setExportProgress});
+      const blob = await exportRecapVideo(trip, {vehicle, styleId, frame, quality, fps, speed: playbackSpeed, signal: controller.signal, onProgress: setExportProgress});
       setVideo({url: URL.createObjectURL(blob), blob});
       setStatus("MP4 ready to download.");
       setStatusTone("success");
@@ -394,7 +394,7 @@ export default function TripRecapPage() {
       exportAbortRef.current = null;
       setExportProgress(null);
     }
-  }, [analyzing, exporting, fps, frame, quality, styleId, trip, vehicle]);
+  }, [analyzing, exporting, fps, frame, playbackSpeed, quality, styleId, trip, vehicle]);
 
   const jsonValues = useMemo<Record<JsonTab, unknown>>(
     () => ({trip: trip?.trip ?? null, route: trip?.route ?? null, timeline: trip?.timeline ?? null}),
@@ -444,6 +444,7 @@ export default function TripRecapPage() {
     </div>
   );
 
+  const exportLength = Math.round(Math.min((trip?.timeline?.duration_seconds ?? 0) / playbackSpeed, EXPORT_MAX_SECONDS));
   const exportText = exporting
     ? exportProgress?.stage === "preparing"
       ? "Loading map and media…"
@@ -452,7 +453,7 @@ export default function TripRecapPage() {
         : `Rendering ${exportPercent}%`
     : video
       ? `Ready · ${(video.blob.size / 1_048_576).toFixed(1)} MB`
-      : `${exportDimensions(frame, quality).join("×")} · H.264 MP4`;
+      : `${exportDimensions(frame, quality).join("×")} · ${exportLength} s at ${playbackSpeed === 0.5 ? "½" : playbackSpeed}× · MP4`;
 
   return (
     <Theme theme={tripRecapTheme} mode="dark">
