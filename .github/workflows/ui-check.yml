@@ -1,0 +1,27 @@
+name: ui-check
+on:
+  push:
+    branches: [ci/ui-screenshot]
+permissions:
+  contents: write
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --ignore-scripts
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npm i --no-save playwright@1.47.2
+      - run: (cd frontend/out && python3 -m http.server 4173 >/dev/null 2>&1 &) && sleep 2 && node --experimental-strip-types .github/ui-check/run.mjs
+      - run: ffprobe -v error -count_frames -show_entries stream=codec_name,width,height,nb_read_frames,r_frame_rate:format=duration -of default=nw=1 shots/export.mp4 >> shots/log.txt 2>&1 || true
+        if: always()
+      - if: always()
+        run: |
+          git config user.name ui-check && git config user.email ui-check@users.noreply.github.com
+          mkdir -p ui-shots && cp -r shots/. ui-shots/
+          git add -f ui-shots && git commit -m "ui-check results [skip ci]" && git push origin HEAD:ci/ui-screenshot
