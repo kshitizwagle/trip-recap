@@ -7,19 +7,33 @@ import {haversineMeters} from "./geo.ts";
 /** Assumed speed when stops are out of time order (reordered or added by hand). */
 export const FALLBACK_SPEED_KPH = 40;
 
+/** How long the overview shows before the traveller sets off. */
+export const INTRO_SECONDS = 0.8;
+
+/** Real travel time → video seconds. Tuned so a short hop takes ~1.5 s and a long drive ~10 s. */
 const ANCHORS: Array<[number, number]> = [
-  [120, 1],
-  [1800, 3],
-  [7200, 5],
-  [28800, 7],
+  [120, 1.5],
+  [1800, 4],
+  [7200, 6.5],
+  [28800, 9],
 ];
+const MAX_MOVE_SECONDS = 14;
+/** Long legs also get at least this many video seconds per straight-line km, so they don't race past. */
+const SECONDS_PER_KM = 1 / 25;
+
+/** Video seconds for a leg: compressed travel time, with a distance-based floor for long drives. */
+export function moveSeconds(realSeconds: number, meters: number): number {
+  const byTime = compressGapSeconds(realSeconds);
+  const byDistance = (meters / 1000) * SECONDS_PER_KM;
+  return Math.min(MAX_MOVE_SECONDS, Math.max(byTime, byDistance));
+}
 
 /** Map real travel time to a compact video duration using log interpolation. */
 export function compressGapSeconds(realSeconds: number): number {
   if (realSeconds <= 0) return 0;
-  if (realSeconds <= ANCHORS[0][0]) return Math.max(0.5, (realSeconds / ANCHORS[0][0]) * ANCHORS[0][1]);
+  if (realSeconds <= ANCHORS[0][0]) return Math.max(0.75, (realSeconds / ANCHORS[0][0]) * ANCHORS[0][1]);
   const last = ANCHORS[ANCHORS.length - 1];
-  if (realSeconds > last[0]) return Math.min(8, last[1] + 0.5 * Math.log(realSeconds / last[0] + 1));
+  if (realSeconds > last[0]) return Math.min(MAX_MOVE_SECONDS - 2, last[1] + Math.log(realSeconds / last[0] + 1));
   for (let i = 1; i < ANCHORS.length; i += 1) {
     const [leftS, leftV] = ANCHORS[i - 1];
     const [rightS, rightV] = ANCHORS[i];
@@ -45,22 +59,23 @@ export class TimelineBuilder {
       {video_time: 0, type: "route_start", payload: {}},
       {video_time: 0, type: "camera_overview", payload: {}},
     ];
-    let cursor = 1;
+    let cursor = INTRO_SECONDS;
     const observations = trip.observations;
     const mediaById = new Map(trip.media.map((item) => [item.id, item]));
 
-    if (observations.length) cursor = this.emitObservation(events, observations[0], mediaById, cursor);
+    // The first stop's media plays while the traveller sets off, so the trip starts moving right away.
+    if (observations.length) this.emitObservation(events, observations[0], mediaById, cursor);
 
     for (let i = 1; i < observations.length; i += 1) {
       const previous = observations[i - 1];
       const current = observations[i];
       let realGap = (timeMs(current.arrival) - timeMs(previous.departure)) / 1000;
+      const meters = haversineMeters(previous.latitude, previous.longitude, current.latitude, current.longitude);
       if (!(realGap > 0)) {
         // No usable clock gap (same moment, or stops reordered/added by hand): estimate from distance.
-        const meters = haversineMeters(previous.latitude, previous.longitude, current.latitude, current.longitude);
         realGap = meters > 1 ? Math.max(60, (meters / 1000 / FALLBACK_SPEED_KPH) * 3600) : 0;
       }
-      const moveDuration = compressGapSeconds(realGap);
+      const moveDuration = moveSeconds(realGap, meters);
       events.push({video_time: cursor, type: "location_departure", payload: {observation_id: previous.id}});
       events.push({
         video_time: cursor,
@@ -76,9 +91,12 @@ export class TimelineBuilder {
       cursor = this.emitObservation(events, current, mediaById, cursor);
     }
 
+    // First-stop media can outlast the first move; keep the end after every event.
+    cursor = Math.max(cursor, ...events.map((event) => event.video_time));
     events.push({video_time: cursor, type: "camera_overview", payload: {}});
-    events.push({video_time: cursor + 1, type: "route_end", payload: {}});
-    const duration = cursor + 1;
+    events.push({video_time: cursor + 1.5, type: "route_end", payload: {}});
+    events.sort((a, b) => a.video_time - b.video_time);
+    const duration = cursor + 1.5;
     trip.stats.video_duration_seconds = duration;
     return {duration_seconds: duration, events};
   }
