@@ -6,8 +6,8 @@ import TripTheme from "@/components/TripTheme";
 import "../src/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Trip Recap — Camera roll to route",
-  description: "Reconstruct a trip from the metadata already inside your photos and videos.",
+  title: "Trip Recap",
+  description: "Turn the GPS and capture times inside your photos and videos into an animated route map and a vertical MP4, entirely in your browser.",
   icons: {icon: "/icon.svg"},
 };
 
