@@ -448,7 +448,7 @@ export default function TripRecapPage() {
               Add media
               <input type="file" className="visually-hidden" accept={ACCEPTED_MEDIA} multiple disabled={busy} onChange={addFiles} />
             </label>
-            {(trip || records.length > 0) && buildButton}
+            {trip && buildButton}
           </div>
         </header>
 
