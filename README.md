@@ -5,7 +5,7 @@ capture times and GPS metadata already inside them. Missing metadata stays expli
 between recorded points are inferred and drawn differently.
 
 Everything runs in the browser. The app is a static Next.js export that deploys to
-Cloudflare Pages (or any static host) with no server, database or API key.
+Cloudflare (Workers static assets or Pages) or any static host, with no server, database or API key.
 
 - `frontend/`: the app. Next.js static export with Astryx (Aura Dark theme), Sonner and MapLibre.
 - `frontend/src/lib/engine/`: the pipeline as plain TypeScript, ported from the original backend:
@@ -39,7 +39,7 @@ npm run typecheck
 npm run build      # static site in frontend/out
 ```
 
-See [deployment instructions](docs/deployment.md) for Cloudflare Pages.
+See [deployment instructions](docs/deployment.md) for Cloudflare.
 
 ## Browser support
 
