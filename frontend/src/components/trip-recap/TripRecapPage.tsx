@@ -384,7 +384,7 @@ export default function TripRecapPage() {
             <Stack as="aside" className="editor-sidebar" gap={0} aria-label="Recap settings">
               <TabList role="tablist" aria-label="Steps" value={step} onChange={setStep} layout="fill" size="sm" hasDivider>
                 {STEPS.map((item) => (
-                  <Tab key={item.id} id={`tab-${item.id}`} value={item.id} label={`${item.number} ${item.title}`} panelId={`panel-${item.id}`} />
+                  <Tab key={item.id} id={`tab-${item.id}`} value={item.id} label={item.title} panelId={`panel-${item.id}`} />
                 ))}
               </TabList>
 
@@ -392,13 +392,13 @@ export default function TripRecapPage() {
                 <Stack id="panel-Media" role="tabpanel" aria-labelledby="tab-Media" hidden={step !== "Media"} gap={5}>
                   <Stack gap={2}>
                     <Heading level={2}>Start with the camera roll</Heading>
-                    <Text color="secondary">Add original photos and videos. Their GPS and capture times draw the route.</Text>
+                    <Text color="secondary">{records.length || trip ? "Add more, or remove anything you don't want on the map." : "Drop originals into the stage on the right. Their GPS and capture times draw the route."}</Text>
                   </Stack>
-                  {uploadInput}
+                  {(records.length > 0 || trip) && uploadInput}
                   <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
                   <Stack className="editor-note" padding={4} gap={2}>
                     <Text className="eyebrow">private by design</Text>
-                    <Text type="supporting">Files never leave this device. Only rounded coordinates go to the public road router and place-name service.</Text>
+                    <Text type="supporting">Files never leave this device. Only point coordinates go to the public road router and place-name service.</Text>
                   </Stack>
                 </Stack>
 
