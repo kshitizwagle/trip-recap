@@ -1,7 +1,10 @@
-name = "trip-recap"
 compatibility_date = "2026-09-18"
-# Static export only: Pages serves frontend/out. No API URL or server is needed.
-pages_build_output_dir = "./out"
+
+# Static export served as Workers static assets (deploy: `npx wrangler deploy --assets=./out`).
+# No API URL or server code is needed.
+[assets]
+directory = "./out"
+not_found_handling = "404-page"
 
 [vars]
 NODE_VERSION = "22"
