@@ -1,5 +1,7 @@
 export const MAX_CONCURRENT_UPLOADS = 4;
-export const MAX_FILE_BYTES = 25 * 1024 * 1024;
+// Files are read locally, so the limit only guards browser memory during preview and export.
+export const MAX_FILE_BYTES = 1024 * 1024 * 1024;
+export const MAX_FILE_LABEL = "1 GB";
 
 export type UploadStatus = "queued" | "uploading" | "uploaded" | "failed";
 
