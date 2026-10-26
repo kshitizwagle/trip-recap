@@ -393,3 +393,17 @@ test("Photon fallback formats places by granularity", async () => {
   }});
   assert.equal(await photon.reverse(27.6588, 85.3247, "city"), "Lalitpur");
 });
+
+import {cleanPlaceName} from "./engine/places.ts";
+
+test("Nepali administrative names are tidied for map labels", () => {
+  assert.equal(cleanPlaceName("Indrasarowar-04"), "Indrasarowar");
+  assert.equal(cleanPlaceName("Bharatpur-12"), "Bharatpur");
+  assert.equal(cleanPlaceName("Dakshinkali Municipality"), "Dakshinkali");
+  assert.equal(cleanPlaceName("Indrasarowar Rural Municipality, Makwanpur"), "Indrasarowar");
+  assert.equal(cleanPlaceName("Lalitpur Metropolitan City"), "Lalitpur");
+  assert.equal(cleanPlaceName("Thaha-04"), "Thaha");
+  assert.equal(cleanPlaceName("Lumbini Bazaar"), "Lumbini Bazaar");
+  assert.equal(cleanPlaceName("Route 66"), "Route 66");
+  assert.equal(formatPlaceName({address: {neighbourhood: "Dakshinkali-05", city: "Dakshinkali"}}, "neighborhood"), "Dakshinkali");
+});

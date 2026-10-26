@@ -1,28 +1,16 @@
 "use client";
 
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {
-  AppShell,
-  Button,
-  CheckboxInput,
-  FileInput,
-  Heading,
-  ProgressBar,
-  Selector,
-  Stack,
-  Tab,
-  TabList,
-  Text,
-  Token,
-} from "@astryxdesign/core";
+import {CheckboxInput, FileInput, Stack, Text} from "@astryxdesign/core";
 import {Theme} from "@astryxdesign/core/theme";
 import {tripRecapTheme} from "@/theme";
 import {Toaster, toast} from "sonner";
 import LocationAutocomplete from "@/components/trip-recap/LocationAutocomplete";
 import MapPreview, {type MapPreviewHandle} from "@/components/trip-recap/MapPreview";
 import MediaQueue, {type MediaUploadRecord} from "@/components/trip-recap/MediaQueue";
+import Segmented from "@/components/trip-recap/Segmented";
 import StopEditor from "@/components/trip-recap/StopEditor";
-import {FRAME_IDS, FRAMES, type FrameId, MAP_STYLE_IDS, MAP_STYLES, type MapStyleId} from "@/lib/recap-scene";
+import {ARROW, FRAME_IDS, FRAMES, type FrameId, MAP_STYLE_IDS, MAP_STYLES, type MapStyleId} from "@/lib/recap-scene";
 import {
   analyzeSession,
   discardUploadedMedia,
@@ -33,7 +21,7 @@ import {
   uploadMedia,
   type UploadRequest,
 } from "@/lib/trip-api";
-import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_MAX_SECONDS, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
+import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
 import {
   MAX_CONCURRENT_UPLOADS,
   MAX_FILE_LABEL,
@@ -44,14 +32,9 @@ import {
 import type {TripData} from "@/lib/trip-types";
 
 const ACCEPTED_MEDIA = ".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*";
-const VEHICLES = ["🛵", "🚗", "🏍️", "🚲", "🚙"] as const;
+const VEHICLES = [ARROW, "🛵", "🚗", "🏍️", "🚲"] as const;
 const PLACE_DETAILS = ["specific", "neighborhood", "city", "region"] as const;
-const STEPS = [
-  {id: "Media", number: "01", title: "Media"},
-  {id: "Route", number: "02", title: "Route"},
-  {id: "Look", number: "03", title: "Look"},
-  {id: "Export", number: "04", title: "Export"},
-] as const;
+const SPEEDS = [0.5, 1, 2] as const;
 type Vehicle = (typeof VEHICLES)[number];
 type PlaceDetail = (typeof PLACE_DETAILS)[number];
 type JsonTab = "trip" | "route" | "timeline";
@@ -68,11 +51,6 @@ function formatDistance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "Not available";
-  return new Date(value).toLocaleString([], {dateStyle: "medium", timeStyle: "short"});
-}
-
 function formatSpan(start: string | null, end: string | null): string {
   if (!start || !end) return "—";
   const hours = (Date.parse(end) - Date.parse(start)) / 3_600_000;
@@ -81,15 +59,8 @@ function formatSpan(start: string | null, end: string | null): string {
   return `${Math.round(hours / 24)} days`;
 }
 
-function vehicleLabel(value: Vehicle): string {
-  const labels: Record<Vehicle, string> = {"🛵": "Scooter", "🚗": "Car", "🏍️": "Motorcycle", "🚲": "Bicycle", "🚙": "Jeep"};
-  return labels[value];
-}
-
-function placeDetailLabel(value: PlaceDetail): string {
-  const labels: Record<PlaceDetail, string> = {specific: "Specific", neighborhood: "Neighborhood", city: "City / Town", region: "Region"};
-  return labels[value];
-}
+const PLACE_DETAIL_LABELS: Record<PlaceDetail, string> = {specific: "Exact", neighborhood: "Area", city: "Town", region: "Region"};
+const SHORT_FRAME: Record<FrameId, string> = {portrait: "9:16", landscape: "16:9", square: "1:1"};
 
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -119,17 +90,16 @@ export default function TripRecapPage() {
   const [quality, setQuality] = useState<ExportQuality>(1080);
   const [fps, setFps] = useState<ExportFrameRate>(30);
   const [editingRoute, setEditingRoute] = useState(false);
-  const [vehicle, setVehicle] = useState<Vehicle>("🛵");
+  const [vehicle, setVehicle] = useState<Vehicle>(ARROW);
   const [placeDetail, setPlaceDetail] = useState<PlaceDetail>("neighborhood");
-  const [playbackSpeed, setPlaybackSpeed] = useState("1");
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [analyzing, setAnalyzing] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [video, setVideo] = useState<{url: string; blob: Blob} | null>(null);
   const [exportSupported, setExportSupported] = useState(true);
   const [status, setStatus] = useState("");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
-  const [step, setStep] = useState<string>("Media");
-  const [jsonTab, setJsonTab] = useState<JsonTab>("trip");
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const exporting = exportProgress !== null;
 
   recordsRef.current = records;
@@ -217,7 +187,6 @@ export default function TripRecapPage() {
       const files = value ? (Array.isArray(value) ? value : [value]) : [];
       if (!files.length) return;
       clearResult();
-      setStep("Media");
       const {accepted, rejected} = partitionFiles(files);
       const nextRecords: MediaUploadRecord[] = accepted.map((file) => ({
         clientId: crypto.randomUUID(),
@@ -279,8 +248,6 @@ export default function TripRecapPage() {
       if (!nextTrip) throw new Error("No trip could be built from this media");
       setTrip(nextTrip);
       setVideo(null);
-      setJsonTab("trip");
-      setStep("Route");
       setStatus("Route ready. Style and place detail update without retracing.");
       setStatusTone("success");
       toast.success("Route traced from your media metadata");
@@ -429,233 +396,151 @@ export default function TripRecapPage() {
   const exportPercent = exportProgress?.frames ? Math.round((exportProgress.frame / exportProgress.frames) * 100) : 0;
   const busy = analyzing || exporting;
 
-  const uploadInput = (
-    <FileInput
-      className="editor-upload-input"
-      isDisabled={busy}
-      label="Trip photos and videos"
-      isLabelHidden
-      value={null}
-      onChange={handleFiles}
-      accept={ACCEPTED_MEDIA}
-      isMultiple
-      mode="dropzone"
-      placeholder="Drop photos and videos, or choose files"
-      description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
-    />
+  const addFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  };
+
+  const summary = trip
+    ? `${trip.summary.stop_count} stops · ${formatDistance(trip.summary.distance_meters)} · ${formatSpan(trip.summary.started_at, trip.summary.ended_at)} · ${trip.summary.gps_media_count}/${trip.summary.media_count} geotagged`
+    : retainedRecords.length
+      ? `${retainedRecords.length} of ${records.length} files read · build the route when ready`
+      : "Photos and videos in, animated route map out";
+
+  const buildButton = (
+    <button type="button" id="analyze" className={trip ? "btn" : "btn primary"} disabled={!readyToAnalyze || busy} onClick={analyze}>
+      {analyzing ? "Tracing route…" : trip ? "Rebuild route" : "Build route"}
+    </button>
   );
+
+  const routeOptions = (
+    <div className="option-grid">
+      <LocationAutocomplete id="start-point" label="Start point" value={startLocation} onChange={setStartLocation} placeholder="Auto · first GPS point" />
+      <LocationAutocomplete id="end-point" label="End point" value={endLocation} onChange={setEndLocation} placeholder="Auto · last GPS point" isDisabled={returnToStart} />
+      <Stack gap={2}>
+        <CheckboxInput id="return-start" label="Return to the start" value={returnToStart} onChange={setReturnToStart} size="sm" />
+        <CheckboxInput id="keep-one" label="Keep media together as one trip" value={keepAsOneTrip} onChange={setKeepAsOneTrip} size="sm" />
+      </Stack>
+    </div>
+  );
+
+  const exportText = exporting
+    ? exportProgress?.stage === "preparing"
+      ? "Loading map and media…"
+      : exportProgress?.stage === "finishing"
+        ? "Writing MP4…"
+        : `Rendering ${exportPercent}%`
+    : video
+      ? `Ready · ${(video.blob.size / 1_048_576).toFixed(1)} MB`
+      : `${exportDimensions(frame, quality).join("×")} · H.264 MP4`;
 
   return (
     <Theme theme={tripRecapTheme} mode="dark">
-      <AppShell height="auto" contentPadding={0} variant="section" className="recap-editor">
-        <Stack className="editor-shell" gap={0}>
-          <Stack as="header" direction="horizontal" hAlign="between" vAlign="center" paddingInline={6} paddingBlock={3} className="editor-header">
-            <Stack direction="horizontal" gap={3} vAlign="center">
-              <Text className="editor-logo" aria-hidden="true">↗</Text>
-              <Stack gap={0}>
-                <Heading level={1}>Trip Recap</Heading>
-                <Text className="eyebrow">camera roll → route</Text>
-              </Stack>
-            </Stack>
-            <Stack direction="horizontal" gap={2} vAlign="center">
-              <Token label="runs in your browser" color="teal" size="sm" />
-              <Button href="https://github.com/kshitizwagle/trip-recap" label="Source" variant="ghost" size="sm" />
-            </Stack>
-          </Stack>
+      <div className="studio">
+        <header className="studio-head">
+          <span className="studio-mark" aria-hidden="true">↗</span>
+          <div className="studio-title">
+            <h1>Trip Recap</h1>
+            <p>{summary}</p>
+          </div>
+          <div className="studio-actions">
+            <label className={busy ? "btn is-disabled" : "btn"}>
+              Add media
+              <input type="file" className="visually-hidden" accept={ACCEPTED_MEDIA} multiple disabled={busy} onChange={addFiles} />
+            </label>
+            {(trip || records.length > 0) && buildButton}
+          </div>
+        </header>
 
-          <Stack direction="horizontal" gap={0} className="editor-body">
-            <Stack as="aside" className="editor-sidebar" gap={0} aria-label="Recap settings">
-              <TabList role="tablist" aria-label="Steps" value={step} onChange={setStep} layout="fill" size="sm" hasDivider>
-                {STEPS.map((item) => (
-                  <Tab key={item.id} id={`tab-${item.id}`} value={item.id} label={item.title} panelId={`panel-${item.id}`} />
-                ))}
-              </TabList>
+        {trip ? (
+          <>
+            <div className="stage-holder">
+              <MapPreview ref={mapRef} data={trip} styleId={styleId} frame={frame} vehicle={vehicle} playbackSpeed={playbackSpeed}>
+                <Segmented label="Map" value={styleId} options={MAP_STYLE_IDS.map((id) => ({value: id, label: MAP_STYLES[id].label}))} onChange={setStyleId} />
+                <Segmented label="Speed" value={playbackSpeed} options={SPEEDS.map((value) => ({value, label: value === 0.5 ? "½×" : `${value}×`}))} onChange={setPlaybackSpeed} />
+                <Segmented label="Frame" value={frame} options={FRAME_IDS.map((id) => ({value: id, label: SHORT_FRAME[id] ?? FRAMES[id].label}))} onChange={setFrame} />
+                <Segmented label="Marker" value={vehicle} options={VEHICLES.map((value) => ({value, label: value === ARROW ? "Arrow" : value}))} onChange={(value) => setVehicle(value as Vehicle)} />
+              </MapPreview>
+            </div>
 
-              <Stack className="editor-settings" padding={5} gap={5} isScrollable>
-                <Stack id="panel-Media" role="tabpanel" aria-labelledby="tab-Media" hidden={step !== "Media"} gap={5}>
-                  <Stack gap={2}>
-                    <Heading level={2}>Start with the camera roll</Heading>
-                    <Text color="secondary">{records.length || trip ? "Add more, or remove anything you don't want on the map." : "Drop your originals into the map stage. Their GPS and capture times draw the route."}</Text>
-                  </Stack>
-                  {(records.length > 0 || trip) && uploadInput}
-                  <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
-                  <Stack className="editor-note" padding={4} gap={2}>
-                    <Text className="eyebrow">private by design</Text>
-                    <Text type="supporting">Files never leave this device. Only point coordinates go to the public road router and place-name service.</Text>
-                  </Stack>
-                </Stack>
+            <div className="controls">
+              {exporting ? (
+                <button type="button" className="btn" onClick={() => exportAbortRef.current?.abort()}>Cancel</button>
+              ) : (
+                <button type="button" id="render" className="btn primary" disabled={busy || !exportSupported} onClick={requestExport}>Export video</button>
+              )}
+              <Segmented label="Quality" value={quality} options={EXPORT_QUALITIES.map((value) => ({value, label: `${value}p`}))} onChange={setQuality} isDisabled={exporting} />
+              <Segmented label="FPS" value={fps} options={EXPORT_FRAME_RATES.map((value) => ({value, label: String(value)}))} onChange={setFps} isDisabled={exporting} />
+              {exporting && <progress className="export-progress" max={100} value={exportPercent} aria-label="Export progress" />}
+              <span className="exp-status" role="status">{exportText}</span>
+              {video && (
+                <button type="button" id="video-download" className="btn primary" onClick={() => download(video.blob, "trip-recap.mp4")}>Download MP4</button>
+              )}
+            </div>
 
-                <Stack id="panel-Route" role="tabpanel" aria-labelledby="tab-Route" hidden={step !== "Route"} gap={5}>
-                  <Stack gap={2}>
-                    <Heading level={2}>Your route</Heading>
-                    <Text color="secondary">The first and last GPS points are used by default. Change the endpoints only if you need to.</Text>
-                  </Stack>
-                  <LocationAutocomplete id="start-point" label="Start point (optional)" value={startLocation} onChange={setStartLocation} placeholder="Auto · first GPS point" />
-                  <LocationAutocomplete id="end-point" label="End point (optional)" value={endLocation} onChange={setEndLocation} placeholder="Auto · last GPS point" isDisabled={returnToStart} />
-                  <CheckboxInput id="return-start" label="Return to the start" value={returnToStart} onChange={setReturnToStart} size="sm" />
-                  <CheckboxInput id="keep-one" label="Keep media together as one trip" value={keepAsOneTrip} onChange={setKeepAsOneTrip} size="sm" />
-                  {trip ? (
-                    <StopEditor trip={trip} busy={busy || editingRoute} onMove={moveStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
-                  ) : (
-                    <Text type="supporting">Build the route to see the points your media recorded.</Text>
-                  )}
-                </Stack>
+            {!exportSupported && <p className="note status-error">This browser cannot encode video. Use a recent Chrome, Edge or Safari.</p>}
+            {trip.route_error && <p className="note status-error">Routing note: {trip.route_error}</p>}
+            {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
 
-                <Stack id="panel-Look" role="tabpanel" aria-labelledby="tab-Look" hidden={step !== "Look"} gap={5}>
-                  <Stack gap={2}>
-                    <Heading level={2}>Set the scene</Heading>
-                    <Text color="secondary">These change the preview right away.</Text>
-                  </Stack>
-                  <Selector id="map-style" label="Map style" options={MAP_STYLE_IDS.map((id) => MAP_STYLES[id].label)} value={MAP_STYLES[styleId].label} onChange={(value) => setStyleId(MAP_STYLE_IDS.find((id) => MAP_STYLES[id].label === value) ?? "dark")} width="100%" />
-                  <Selector id="frame" label="Frame" options={FRAME_IDS.map((id) => `${FRAMES[id].label} · ${id}`)} value={`${FRAMES[frame].label} · ${frame}`} onChange={(value) => setFrame(FRAME_IDS.find((id) => value.endsWith(id)) ?? "portrait")} width="100%" />
-                  <Selector id="place-detail" label="Place-name detail" options={PLACE_DETAILS.map(placeDetailLabel)} value={placeDetailLabel(placeDetail)} onChange={(value) => setPlaceDetail(PLACE_DETAILS.find((item) => placeDetailLabel(item) === value) ?? "neighborhood")} width="100%" />
-                  <Selector id="vehicle" label="Vehicle" options={VEHICLES.map(vehicleLabel)} value={vehicleLabel(vehicle)} onChange={(value) => setVehicle(VEHICLES.find((item) => vehicleLabel(item) === value) ?? "🛵")} width="100%" />
-                  <Selector id="playback-speed" label="Playback speed" options={["0.5×", "1×", "1.5×", "2×", "3×"]} value={`${playbackSpeed}×`} onChange={(value) => setPlaybackSpeed(value.replace("×", ""))} width="100%" />
-                  <Text type="supporting">The preview and the MP4 use the same style, frame and vehicle.</Text>
-                </Stack>
+            <details className="drawer" open>
+              <summary>Stops <span>{trip.observations.length}</span></summary>
+              <div className="drawer-body">
+                <StopEditor trip={trip} busy={busy || editingRoute} onMove={moveStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
+              </div>
+            </details>
 
-                <Stack id="panel-Export" role="tabpanel" aria-labelledby="tab-Export" hidden={step !== "Export"} gap={5}>
-                  <Stack gap={2}>
-                    <Heading level={2}>Take it with you</Heading>
-                    <Text color="secondary">Render an MP4 here in the browser, exactly as the preview plays.</Text>
-                  </Stack>
-                  <Selector id="export-frame" label="Frame" options={FRAME_IDS.map((id) => `${FRAMES[id].label} · ${id}`)} value={`${FRAMES[frame].label} · ${frame}`} onChange={(value) => setFrame(FRAME_IDS.find((id) => value.endsWith(id)) ?? "portrait")} width="100%" />
-                  <Selector id="quality" label="Quality" options={EXPORT_QUALITIES.map((value) => `${value}p`)} value={`${quality}p`} onChange={(value) => setQuality((Number.parseInt(value, 10) as ExportQuality) || 1080)} width="100%" />
-                  <Selector id="fps" label="Frame rate" options={EXPORT_FRAME_RATES.map((value) => `${value} FPS`)} value={`${fps} FPS`} onChange={(value) => setFps((Number.parseInt(value, 10) as ExportFrameRate) || 30)} width="100%" />
-                  <Stack className="editor-note" padding={4} gap={1}>
-                    <Text className="eyebrow">{FRAMES[frame].label} · {MAP_STYLES[styleId].label.toLowerCase()} map</Text>
-                    <Text type="supporting">{exportDimensions(frame, quality).join(" × ")} · {fps} FPS · H.264 MP4 · up to {EXPORT_MAX_SECONDS} s</Text>
-                    <Text type="supporting">Keep this tab open while it renders. Higher quality and 60 FPS take longer.</Text>
-                  </Stack>
-                  {!exportSupported && <Text type="supporting" className="status-error">This browser cannot encode video. Use a recent Chrome, Edge or Safari.</Text>}
-                  {exporting ? (
-                    <Stack gap={3}>
-                      <ProgressBar value={exportPercent} label="Export progress" variant="accent" />
-                      <Text type="supporting">
-                        {exportProgress?.stage === "preparing" ? "Loading map tiles and media…" : exportProgress?.stage === "finishing" ? "Writing the MP4…" : `Frame ${exportProgress?.frame} of ${exportProgress?.frames}`}
-                      </Text>
-                      <Button label="Cancel export" variant="secondary" width="100%" onClick={() => exportAbortRef.current?.abort()} />
-                    </Stack>
-                  ) : (
-                    <Button id="render" label="Export MP4" variant="primary" width="100%" isDisabled={!trip || busy || !exportSupported} onClick={requestExport} />
-                  )}
-                  {!trip && <Text type="supporting">Build your route to unlock export.</Text>}
-                  {video && (
-                    <Stack gap={3}>
-                      <video className="editor-result-video" src={video.url} controls playsInline muted aria-label="Exported recap" />
-                      <Button id="video-download" label={`Download MP4 · ${(video.blob.size / 1_048_576).toFixed(1)} MB`} variant="primary" width="100%" onClick={() => download(video.blob, "trip-recap.mp4")} />
-                    </Stack>
-                  )}
-                  {trip && (
-                    <details className="editor-details">
-                      <summary>Trip data downloads</summary>
-                      <Stack paddingBlock={3} gap={2}>
-                        {(["trip", "route", "timeline"] as JsonTab[]).map((kind) => (
-                          <Button key={kind} label={`Download ${kind === "route" ? "route.geojson" : `${kind}.json`}`} variant="secondary" size="sm" onClick={() => download(new Blob([JSON.stringify(jsonValues[kind], null, 2)], {type: "application/json"}), kind === "route" ? "route.geojson" : `${kind}.json`)} />
-                        ))}
-                      </Stack>
-                    </details>
-                  )}
-                </Stack>
-              </Stack>
-
-              <Stack as="footer" padding={5} gap={3} className="editor-sidebar-footer">
-                <Text id="status" as="p" type="supporting" className={`status-${statusTone}`} aria-live="polite">{status}</Text>
-                <Button id="analyze" label={analyzing ? "Tracing your route…" : trip ? "Rebuild route" : "Build route"} variant={trip ? "secondary" : "primary"} width="100%" isDisabled={!readyToAnalyze || busy} isLoading={analyzing} onClick={analyze} />
-                <Text type="supporting">{retainedRecords.length} media ready · nothing uploaded</Text>
-              </Stack>
-            </Stack>
-
-            <Stack as="section" className="editor-preview" gap={4} padding={6} aria-label="Trip preview">
-              {trip && (
-                <Stack direction="horizontal" gap={0} className="editor-stats" wrap="wrap">
-                  {[
-                    ["points", String(trip.summary.stop_count)],
-                    ["distance", formatDistance(trip.summary.distance_meters)],
-                    ["geotagged", `${trip.summary.gps_media_count} / ${trip.summary.media_count}`],
-                    ["span", formatSpan(trip.summary.started_at, trip.summary.ended_at)],
-                  ].map(([label, value]) => (
-                    <Stack key={label} gap={1} className="editor-stat" padding={4}>
-                      <Text className="eyebrow">{label}</Text>
-                      <Text className="editor-stat-value">{value}</Text>
-                    </Stack>
+            <details className="drawer" open={optionsOpen} onToggle={(event) => setOptionsOpen((event.target as HTMLDetailsElement).open)}>
+              <summary>Media &amp; options <span>{retainedRecords.length}</span></summary>
+              <div className="drawer-body">
+                <Segmented label="Place names" value={placeDetail} options={PLACE_DETAILS.map((value) => ({value, label: PLACE_DETAIL_LABELS[value]}))} onChange={setPlaceDetail} />
+                {routeOptions}
+                <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                <div className="controls">
+                  {(["trip", "route", "timeline"] as JsonTab[]).map((kind) => (
+                    <button key={kind} type="button" className="btn small" onClick={() => download(new Blob([JSON.stringify(jsonValues[kind], null, 2)], {type: "application/json"}), kind === "route" ? "route.geojson" : `${kind}.json`)}>
+                      {kind === "route" ? "route.geojson" : `${kind}.json`}
+                    </button>
                   ))}
-                </Stack>
-              )}
-
-              <Stack className="editor-stage" gap={0}>
-                {trip ? (
-                  <MapPreview ref={mapRef} data={trip} styleId={styleId} frame={frame} vehicle={vehicle} playbackSpeed={Number(playbackSpeed)} />
-                ) : (
-                  <Stack className="editor-empty" hAlign="center" vAlign="center" gap={6} padding={8}>
-                    <Stack gap={3} hAlign="center" className="editor-empty-copy">
-                      <Text className="eyebrow">trip recap</Text>
-                      <Heading level={2}>Make a trip out of the camera roll.</Heading>
-                      <Text color="secondary" justify="center">Drop the photos and videos from a day out. Their GPS and capture times draw the route, then it plays as a map you can export.</Text>
-                    </Stack>
-                    <Stack className="editor-empty-drop">{uploadInput}</Stack>
-                    <Stack as="ol" direction="horizontal" gap={0} className="editor-empty-steps" wrap="wrap">
-                      {[
-                        ["01", "Add media", "Read on this device"],
-                        ["02", "Build route", "Roads inferred between points"],
-                        ["03", "Play & export", "Vertical MP4"],
-                      ].map(([number, title, detail]) => (
-                        <Stack as="li" key={number} gap={1} padding={4} className="editor-empty-step">
-                          <Text className="editor-stop-number">{number}</Text>
-                          <Text weight="medium">{title}</Text>
-                          <Text type="supporting">{detail}</Text>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  </Stack>
-                )}
-              </Stack>
-
-              {trip && (
-                <>
-                  <Stack direction="horizontal" hAlign="between" vAlign="center" gap={3} wrap="wrap">
-                    <Stack direction="horizontal" gap={2} vAlign="center" wrap="wrap">
-                      <Button id="replay" label="Replay" icon={<Text aria-hidden="true">↺</Text>} variant="primary" size="sm" onClick={() => mapRef.current?.replayRoute()} />
-                      <Button id="fit" label="Show whole route" variant="ghost" size="sm" onClick={() => mapRef.current?.fitRoute()} />
-                    </Stack>
-                    <Stack direction="horizontal" gap={3} vAlign="center" className="editor-legend">
-                      <Text type="supporting"><span className="legend-swatch legend-observed" aria-hidden="true" /> recorded point</Text>
-                      <Text type="supporting"><span className="legend-swatch legend-inferred" aria-hidden="true" /> {trip.route ? "inferred road" : "straight line (no road found)"}</Text>
-                    </Stack>
-                  </Stack>
-                  {trip.route_error && <Text type="supporting" className="status-error">Routing note: {trip.route_error}</Text>}
-                  <details className="editor-details">
-                    <summary>Inspect route evidence</summary>
-                    <Stack gap={3} paddingBlock={3} isScrollable>
-                      <table>
-                        <thead><tr><th>Point</th><th>Media</th><th>Captured</th><th>Latitude</th><th>Longitude</th></tr></thead>
-                        <tbody>
-                          {trip.observations.map((observation) => (
-                            <tr key={observation.id}>
-                              <td>{observation.place}</td>
-                              <td>{observation.media_files.join(", ") || "Endpoint you entered"}</td>
-                              <td>{formatDate(observation.arrival)}</td>
-                              <td>{observation.latitude.toFixed(5)}</td>
-                              <td>{observation.longitude.toFixed(5)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <Stack direction="horizontal" gap={2}>
-                        {(["trip", "route", "timeline"] as JsonTab[]).map((tab) => (
-                          <Button key={tab} label={tab === "route" ? "route.geojson" : `${tab}.json`} variant={jsonTab === tab ? "primary" : "ghost"} size="sm" onClick={() => setJsonTab(tab)} />
-                        ))}
-                      </Stack>
-                      <pre>{JSON.stringify(jsonValues[jsonTab], null, 2)}</pre>
-                    </Stack>
-                  </details>
-                </>
-              )}
-            </Stack>
-          </Stack>
-        </Stack>
+                </div>
+              </div>
+            </details>
+          </>
+        ) : (
+          <section className="empty-stage" aria-label="Add media">
+            <div className="empty-copy">
+              <h2>Make a trip out of the camera roll.</h2>
+              <p>Drop the photos and videos from a trip. Their GPS and capture times draw the route, then it plays as a map you can export.</p>
+            </div>
+            <div className="empty-drop">
+              <FileInput
+                className="editor-upload-input"
+                isDisabled={busy}
+                label="Trip photos and videos"
+                isLabelHidden
+                value={null}
+                onChange={handleFiles}
+                accept={ACCEPTED_MEDIA}
+                isMultiple
+                mode="dropzone"
+                placeholder="Drop photos and videos, or choose files"
+                description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
+              />
+            </div>
+            {records.length > 0 && (
+              <div className="empty-setup">
+                <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                {routeOptions}
+                <div className="controls">
+                  {buildButton}
+                  {status && <span id="status" className={`exp-status status-${statusTone}`} aria-live="polite">{status}</span>}
+                </div>
+              </div>
+            )}
+            <p className="note">Everything runs in this browser. Files never leave your device; only point coordinates go to the road router (OSRM) and place names (OpenStreetMap).</p>
+          </section>
+        )}
         <Toaster position="bottom-right" theme="dark" richColors closeButton />
-      </AppShell>
+      </div>
     </Theme>
   );
 }
