@@ -1,0 +1,221 @@
+{
+  "duration_seconds": 29.551607637987516,
+  "events": [
+    {
+      "video_time": 0,
+      "type": "route_start",
+      "payload": {}
+    },
+    {
+      "video_time": 0,
+      "type": "camera_overview",
+      "payload": {}
+    },
+    {
+      "video_time": 0.8,
+      "type": "location_arrival",
+      "payload": {
+        "observation_id": "b8dac4c2-8ece-5e42-b3a3-b25f7b1ce190"
+      }
+    },
+    {
+      "video_time": 0.8,
+      "type": "camera_zoom",
+      "payload": {
+        "observation_id": "b8dac4c2-8ece-5e42-b3a3-b25f7b1ce190"
+      }
+    },
+    {
+      "video_time": 0.8,
+      "type": "media_show",
+      "payload": {
+        "media_id": "05582e40-c5ea-4373-865b-16a8ab60b1cf",
+        "filename": "01-home.jpg",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 0.8,
+      "type": "location_departure",
+      "payload": {
+        "observation_id": "b8dac4c2-8ece-5e42-b3a3-b25f7b1ce190"
+      }
+    },
+    {
+      "video_time": 0.8,
+      "type": "camera_follow",
+      "payload": {
+        "from_observation_id": "b8dac4c2-8ece-5e42-b3a3-b25f7b1ce190",
+        "to_observation_id": "31ea27c6-4675-500e-bd46-5d38d2bf63e9"
+      }
+    },
+    {
+      "video_time": 0.8,
+      "type": "move",
+      "payload": {
+        "from_observation_id": "b8dac4c2-8ece-5e42-b3a3-b25f7b1ce190",
+        "to_observation_id": "31ea27c6-4675-500e-bd46-5d38d2bf63e9",
+        "duration_seconds": 5.5279905266705605
+      }
+    },
+    {
+      "video_time": 3.7,
+      "type": "media_hide",
+      "payload": {
+        "media_id": "05582e40-c5ea-4373-865b-16a8ab60b1cf",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 6.32799052667056,
+      "type": "location_arrival",
+      "payload": {
+        "observation_id": "31ea27c6-4675-500e-bd46-5d38d2bf63e9"
+      }
+    },
+    {
+      "video_time": 6.32799052667056,
+      "type": "camera_zoom",
+      "payload": {
+        "observation_id": "31ea27c6-4675-500e-bd46-5d38d2bf63e9"
+      }
+    },
+    {
+      "video_time": 6.32799052667056,
+      "type": "media_show",
+      "payload": {
+        "media_id": "c35919b4-8216-4808-a6f7-ff7b7922e419",
+        "filename": "02-pharping.jpg",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 9.22799052667056,
+      "type": "media_hide",
+      "payload": {
+        "media_id": "c35919b4-8216-4808-a6f7-ff7b7922e419",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 9.62799052667056,
+      "type": "location_departure",
+      "payload": {
+        "observation_id": "31ea27c6-4675-500e-bd46-5d38d2bf63e9"
+      }
+    },
+    {
+      "video_time": 9.62799052667056,
+      "type": "camera_follow",
+      "payload": {
+        "from_observation_id": "31ea27c6-4675-500e-bd46-5d38d2bf63e9",
+        "to_observation_id": "55c4ff80-f08f-5410-a5dc-ad768c228d39"
+      }
+    },
+    {
+      "video_time": 9.62799052667056,
+      "type": "move",
+      "payload": {
+        "from_observation_id": "31ea27c6-4675-500e-bd46-5d38d2bf63e9",
+        "to_observation_id": "55c4ff80-f08f-5410-a5dc-ad768c228d39",
+        "duration_seconds": 4.921206992707756
+      }
+    },
+    {
+      "video_time": 14.549197519378316,
+      "type": "location_arrival",
+      "payload": {
+        "observation_id": "55c4ff80-f08f-5410-a5dc-ad768c228d39"
+      }
+    },
+    {
+      "video_time": 14.549197519378316,
+      "type": "camera_zoom",
+      "payload": {
+        "observation_id": "55c4ff80-f08f-5410-a5dc-ad768c228d39"
+      }
+    },
+    {
+      "video_time": 14.549197519378316,
+      "type": "media_show",
+      "payload": {
+        "media_id": "f995894f-cad8-4cea-9201-8b00ab4f9751",
+        "filename": "03-fakhel.jpg",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 17.449197519378316,
+      "type": "media_hide",
+      "payload": {
+        "media_id": "f995894f-cad8-4cea-9201-8b00ab4f9751",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 17.849197519378315,
+      "type": "location_departure",
+      "payload": {
+        "observation_id": "55c4ff80-f08f-5410-a5dc-ad768c228d39"
+      }
+    },
+    {
+      "video_time": 17.849197519378315,
+      "type": "camera_follow",
+      "payload": {
+        "from_observation_id": "55c4ff80-f08f-5410-a5dc-ad768c228d39",
+        "to_observation_id": "d42c072e-bed0-5e08-9803-fa16fbd8d670"
+      }
+    },
+    {
+      "video_time": 17.849197519378315,
+      "type": "move",
+      "payload": {
+        "from_observation_id": "55c4ff80-f08f-5410-a5dc-ad768c228d39",
+        "to_observation_id": "d42c072e-bed0-5e08-9803-fa16fbd8d670",
+        "duration_seconds": 6.902410118609204
+      }
+    },
+    {
+      "video_time": 24.75160763798752,
+      "type": "location_arrival",
+      "payload": {
+        "observation_id": "d42c072e-bed0-5e08-9803-fa16fbd8d670"
+      }
+    },
+    {
+      "video_time": 24.75160763798752,
+      "type": "camera_zoom",
+      "payload": {
+        "observation_id": "d42c072e-bed0-5e08-9803-fa16fbd8d670"
+      }
+    },
+    {
+      "video_time": 24.75160763798752,
+      "type": "media_show",
+      "payload": {
+        "media_id": "5d944e1f-38cf-475f-8e72-f7c7aad46a8c",
+        "filename": "04-bhainse.jpg",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 27.651607637987517,
+      "type": "media_hide",
+      "payload": {
+        "media_id": "5d944e1f-38cf-475f-8e72-f7c7aad46a8c",
+        "fade_seconds": 0.4
+      }
+    },
+    {
+      "video_time": 28.051607637987516,
+      "type": "camera_overview",
+      "payload": {}
+    },
+    {
+      "video_time": 29.551607637987516,
+      "type": "route_end",
+      "payload": {}
+    }
+  ]
+}
