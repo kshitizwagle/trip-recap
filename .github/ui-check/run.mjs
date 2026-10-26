@@ -40,6 +40,7 @@ await page.screenshot({path: "shots/3-route-playing.png"});
 await page.waitForTimeout(9000);
 await page.screenshot({path: "shots/3b-route-later.png"});
 log.push(`summary: ${await page.locator(".studio-title p").innerText().catch(() => "none")}`);
+await page.locator(".drawer summary").first().click();
 log.push(`stops: ${await page.locator(".editor-stop-name").allInnerTexts().catch(() => [])}`);
 // reorder: move the first stop down
 await page.getByRole("button", {name: "Move down"}).first().click();
@@ -78,7 +79,7 @@ await phone.waitForTimeout(1500);
 await phone.locator("#analyze").click();
 await phone.waitForSelector(".map-canvas-frame", {timeout: 60000});
 await phone.waitForTimeout(6000);
-await phone.screenshot({path: "shots/6-route-phone.png", fullPage: true});
+await phone.screenshot({path: "shots/6-route-phone.png"});
 } catch (error) {
   log.push(`FAILED: ${error.message}`);
   await page.screenshot({path: "shots/fail.png", fullPage: true}).catch(() => {});

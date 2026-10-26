@@ -248,6 +248,7 @@ export default function TripRecapPage() {
       if (!nextTrip) throw new Error("No trip could be built from this media");
       setTrip(nextTrip);
       setVideo(null);
+      window.scrollTo({top: 0});
       setStatus("Route ready. Style and place detail update without retracing.");
       setStatusTone("success");
       toast.success("Route traced from your media metadata");
@@ -482,7 +483,7 @@ export default function TripRecapPage() {
             {trip.route_error && <p className="note status-error">Routing note: {trip.route_error}</p>}
             {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
 
-            <details className="drawer" open>
+            <details className="drawer">
               <summary>Stops <span>{trip.observations.length}</span></summary>
               <div className="drawer-body">
                 <StopEditor trip={trip} busy={busy || editingRoute} onMove={moveStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
