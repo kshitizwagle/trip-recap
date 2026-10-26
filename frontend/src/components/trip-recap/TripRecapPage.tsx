@@ -334,16 +334,21 @@ export default function TripRecapPage() {
   const removeStop = useCallback(
     (index: number) => {
       if (!trip) return;
-      void editStops(trip.observations.filter((_, i) => i !== index).map((item) => ({id: item.id})), "Stop removed from the route.");
+      const removed = trip.observations[index];
+      // A stop made from the start/end options would come back on the next rebuild, so clear its option too.
+      if (removed?.endpoint === "start") setStartLocation("");
+      if (removed?.endpoint === "end") setEndLocation("");
+      if (removed?.endpoint === "return") setReturnToStart(false);
+      void editStops(trip.observations.filter((_, i) => i !== index).map((item) => ({id: item.id})), removed?.endpoint ? "Stop removed, and its route option cleared." : "Stop removed from the route.");
     },
     [editStops, trip],
   );
 
   const addStop = useCallback(
-    (query: string, position: number) => {
+    (stop: RouteStopInput, position: number) => {
       if (!trip) return;
       const stops: RouteStopInput[] = trip.observations.map((item) => ({id: item.id}));
-      stops.splice(Math.max(0, Math.min(position, stops.length)), 0, {query});
+      stops.splice(Math.max(0, Math.min(position, stops.length)), 0, stop);
       void editStops(stops, "Place added to the route.");
     },
     [editStops, trip],

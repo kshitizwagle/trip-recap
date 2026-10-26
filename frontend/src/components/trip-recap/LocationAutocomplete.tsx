@@ -11,6 +11,8 @@ interface LocationAutocompleteProps {
   placeholder: string;
   isDisabled?: boolean;
   onChange: (value: string) => void;
+  /** Called with the exact suggestion the person picked (coordinates included). */
+  onSelect?: (suggestion: LocationSuggestion) => void;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -24,6 +26,7 @@ export default function LocationAutocomplete({
   placeholder,
   isDisabled = false,
   onChange,
+  onSelect,
 }: LocationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -92,6 +95,7 @@ export default function LocationAutocomplete({
     if (!suggestion.display_name) return;
     selectionRef.current = true;
     onChange(suggestion.display_name);
+    onSelect?.(suggestion);
     setSuggestions([]);
     setActiveIndex(-1);
     setIsOpen(false);

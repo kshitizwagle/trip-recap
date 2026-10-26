@@ -407,3 +407,22 @@ test("Nepali administrative names are tidied for map labels", () => {
   assert.equal(cleanPlaceName("Route 66"), "Route 66");
   assert.equal(formatPlaceName({address: {neighbourhood: "Dakshinkali-05", city: "Dakshinkali"}}, "neighborhood"), "Dakshinkali");
 });
+
+test("an added place can be removed again, even when the same place was added twice", async () => {
+  const services = {
+    router: {route: async (start: {latitude: number; longitude: number}, end: {latitude: number; longitude: number}, s: string, e: string) => ({
+      start_observation_id: s, end_observation_id: e, geometry: [start, end], distance_meters: 1000, duration_seconds: 60, routing_profile: "driving", inferred: true as const,
+    })},
+    forwardGeocode: async () => null,
+  };
+  const [analyzed] = await analyzeMedia([point("a", 0, 40.75, -74.0), point("b", 60, 40.78, -73.97)], {keepAsOneTrip: true, startLocation: null, endLocation: null, returnToStart: false}, services);
+  const original = analyzed.trip.observations.map((item) => ({kind: "observation" as const, id: item.id}));
+  const place = {kind: "custom" as const, latitude: 40.77, longitude: -73.98, name: "Lunch spot"};
+  const twice = await applyStopEdits(analyzed, [...original, {...place, id: "first"}, {...place, id: "second"}], services);
+  assert.deepEqual(twice.trip.observations.slice(2).map((item) => item.id), ["first", "second"]);
+  const once = await applyStopEdits(twice, twice.trip.observations.filter((item) => item.id !== "first").map((item) => ({kind: "observation" as const, id: item.id})), services);
+  assert.deepEqual(once.trip.observations.map((item) => item.id), [...original.map((item) => item.id), "second"]);
+  const none = await applyStopEdits(once, original, services);
+  assert.equal(none.trip.observations.length, 2);
+  assert.equal(none.route?.segments.length, 1);
+});

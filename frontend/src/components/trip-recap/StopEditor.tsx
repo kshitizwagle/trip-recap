@@ -3,6 +3,7 @@
 import {useState} from "react";
 import {Button, Stack, Text, Token} from "@astryxdesign/core";
 import LocationAutocomplete from "@/components/trip-recap/LocationAutocomplete";
+import type {RouteStopInput} from "@/lib/trip-api";
 import type {TripData} from "@/lib/trip-types";
 
 interface StopEditorProps {
@@ -11,7 +12,13 @@ interface StopEditorProps {
   onMove: (index: number, delta: -1 | 1) => void;
   onRemove: (index: number) => void;
   onRename: (observationId: string, name: string) => void;
-  onAdd: (query: string, position: number) => void;
+  onAdd: (stop: RouteStopInput, position: number) => void;
+}
+
+const ENDPOINT_LABELS = {start: "Start point you set", end: "End point you set", return: "Return to start"} as const;
+
+function shortName(displayName: string): string {
+  return displayName.split(",")[0]?.trim() || displayName.trim();
 }
 
 function formatDate(value: string): string {
@@ -40,6 +47,7 @@ export default function StopEditor({trip, busy, onMove, onRemove, onRename, onAd
       <Stack as="ol" gap={0} className="editor-stops">
         {trip.observations.map((observation, index) => {
           const custom = observation.media_files.length === 0;
+          const origin = observation.endpoint ? ENDPOINT_LABELS[observation.endpoint] : custom ? "Place you added" : observation.media_files.join(", ");
           return (
             <Stack as="li" key={observation.id} direction="horizontal" gap={3} paddingBlock={3} vAlign="start" className="editor-stop">
               <Text className="editor-stop-number">{String(index + 1).padStart(2, "0")}</Text>
@@ -72,9 +80,9 @@ export default function StopEditor({trip, busy, onMove, onRemove, onRename, onAd
                     {observation.place}
                   </button>
                 )}
-                <Text type="supporting">{custom ? "Place you added" : observation.media_files.join(", ")}</Text>
+                <Text type="supporting">{origin}</Text>
                 {!custom && <Text type="supporting">{formatDate(observation.arrival)}</Text>}
-                {custom && <Stack direction="horizontal"><Token label="added" color="purple" size="sm" /></Stack>}
+                {custom && <Stack direction="horizontal"><Token label={observation.endpoint ? "from options" : "added"} color="purple" size="sm" /></Stack>}
               </Stack>
               <Stack direction="horizontal" gap={1} vAlign="center" className="editor-stop-actions">
                 <Button label="Move up" icon={<Text aria-hidden="true">↑</Text>} isIconOnly variant="ghost" size="sm" isDisabled={busy || index === 0} onClick={() => onMove(index, -1)} />
@@ -88,7 +96,19 @@ export default function StopEditor({trip, busy, onMove, onRemove, onRename, onAd
 
       <Stack className="editor-note" padding={4} gap={3}>
         <Text className="eyebrow">add a place</Text>
-        <LocationAutocomplete id="add-stop" label="Search for a place" value={query} onChange={setQuery} placeholder="e.g. Lumbini Palace Resort" isDisabled={busy} />
+        <LocationAutocomplete
+          id="add-stop"
+          label="Search for a place"
+          value={query}
+          onChange={setQuery}
+          onSelect={(suggestion) => {
+            if (!suggestion.display_name) return;
+            onAdd({latitude: suggestion.latitude, longitude: suggestion.longitude, name: shortName(suggestion.display_name)}, position < 0 ? count : position);
+            setQuery("");
+          }}
+          placeholder="e.g. Lumbini Palace Resort"
+          isDisabled={busy}
+        />
         <label className="text-control" htmlFor="add-stop-position">
           <span>Position</span>
           <select id="add-stop-position" className="editor-select" value={position} disabled={busy} onChange={(event) => setPosition(Number(event.target.value))}>
@@ -105,11 +125,11 @@ export default function StopEditor({trip, busy, onMove, onRemove, onRename, onAd
           width="100%"
           isDisabled={busy || query.trim().length < 2}
           onClick={() => {
-            onAdd(query.trim(), position < 0 ? count : position);
+            onAdd({query: query.trim()}, position < 0 ? count : position);
             setQuery("");
           }}
         />
-        <Text type="supporting">Added places have no photos, so the timeline estimates travel time from distance.</Text>
+        <Text type="supporting">Pick a suggestion to add it right away, or type a name and press Add. Added places have no photos, so travel time is estimated from distance.</Text>
       </Stack>
     </Stack>
   );
