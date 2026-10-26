@@ -1,0 +1,371 @@
+start: Ekantakuna,Dakshinkali,Indrasarowar Rural Municipality
+added Lumbini Palace Resort: Ekantakuna,Dakshinkali,Indrasarowar Rural Municipality,Lumbini Palace Resort :: Place added to the route.
+FAILED locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByRole('button', { name: 'Add to route' })
+  -   locator resolved to <button type="button" data-size="md" data-elevation="none" data-variant="secondary" class="astryx-button secondary md none x1k57tk5 x1vidyx5 x1t137rt x1jhp3zv xx47ajj x16bblx1 x1wfwxd8 x13aywxo x1n2onr6 x3nfvp2 x6s0dn4 xl56j7k x1txdalj xce4md1 xrrkdod xc342km xng3xce x1jxw6zd xjb2p0i xcr08ib x1kq96og x1e4wzip xuxw1ft x1ypdohk x16khyan xrafxwg xuedmi6 x12w9bfk xlr8y92 x1ueg155 x7uyq82 xmvprkv xetgvay x3oybdh x8ppqj x1gnnqk1 x5lhr3w x17x4s8c x1tgivj0">…</button>
+  - attempting click action
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #1
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #2
+  -   waiting 20ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #3
+  -   waiting 100ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #4
+  -   waiting 100ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #5
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #6
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #7
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #8
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #9
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #10
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #11
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #12
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #13
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #14
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #15
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #16
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #17
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #18
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #19
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #20
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #21
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #22
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #23
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #24
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #25
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #26
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #27
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #28
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #29
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #30
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #31
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #32
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #33
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #34
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #35
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #36
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #37
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #38
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #39
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #40
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #41
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #42
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #43
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #44
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #45
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #46
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #47
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #48
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #49
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #50
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #51
+  -   waiting 500ms
+  -   waiting for element to be visible, enabled and stable
+  -   element is visible, enabled and stable
+  -   scrolling into view if needed
+  -   done scrolling
+  -   <span class="location-suggestion-coordinates">27.5792, 85.1693</span> from <label for="add-stop" class="text-control location-control">…</label> subtree intercepts pointer events
+  - retrying click action, attempt #52
+  -   waiting 500ms
+/home/runner/work/_temp/b4155a0c-a453-4ddd-987e-ae572dd65513.sh: line 1: ffprobe: command not found
