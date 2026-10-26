@@ -1,7 +1,7 @@
 "use client";
 
 import type maplibregl from "maplibre-gl";
-import {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref} from "react";
+import {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type ReactNode, type Ref} from "react";
 import {createSceneMap, FRAMES, type FrameId, type MapStyleId, RecapScene} from "@/lib/recap-scene";
 import type {TripData, TripMedia} from "@/lib/trip-types";
 
@@ -18,6 +18,8 @@ export interface MapPreviewProps {
   vehicle: string;
   playbackSpeed: number;
   onPlayingChange?: (playing: boolean) => void;
+  /** Extra controls placed in the playback row (map style, speed, frame). */
+  children?: ReactNode;
 }
 
 function formatClock(seconds: number): string {
@@ -30,7 +32,7 @@ function formatClock(seconds: number): string {
  * while playing, and the map is free to pan while paused.
  */
 const MapPreview = forwardRef(function MapPreview(
-  {data, styleId, frame, vehicle, playbackSpeed, onPlayingChange}: MapPreviewProps,
+  {data, styleId, frame, vehicle, playbackSpeed, onPlayingChange, children}: MapPreviewProps,
   ref: Ref<MapPreviewHandle>,
 ) {
   const mapHostRef = useRef<HTMLDivElement>(null);
@@ -213,26 +215,30 @@ const MapPreview = forwardRef(function MapPreview(
           ) : null}
         </div>
       </div>
-      <div className="map-scrubber">
-        <button type="button" className="map-play" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
-          {playing ? "❚❚" : "▶"}
+      <div className="controls">
+        <button type="button" id="play" className="btn primary" onClick={togglePlay}>
+          {playing ? "Pause" : "Play"}
         </button>
-        <input
-          type="range"
-          min={0}
-          max={1000}
-          value={duration ? Math.round((time / duration) * 1000) : 0}
-          aria-label="Timeline position"
-          onChange={(event) => {
-            timeRef.current = (Number(event.target.value) / 1000) * duration;
-            followRef.current = true;
-            sceneRef.current?.resetCamera();
-            snapRef.current = true;
-            dirtyRef.current = true;
-            setTime(timeRef.current);
-          }}
-        />
-        <span className="map-clock">{formatClock(time)} / {formatClock(duration)}</span>
+        <button type="button" id="restart" className="btn" onClick={replayRoute}>Restart</button>
+        <div className="scrub">
+          <input
+            type="range"
+            min={0}
+            max={1000}
+            value={duration ? Math.round((time / duration) * 1000) : 0}
+            aria-label="Trip progress"
+            onChange={(event) => {
+              timeRef.current = (Number(event.target.value) / 1000) * duration;
+              followRef.current = true;
+              sceneRef.current?.resetCamera();
+              snapRef.current = true;
+              dirtyRef.current = true;
+              setTime(timeRef.current);
+            }}
+          />
+          <output className="clock">{formatClock(time)}</output>
+        </div>
+        {children}
       </div>
     </section>
   );

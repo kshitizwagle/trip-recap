@@ -67,6 +67,8 @@ export interface Observation {
   media_ids: string[];
   media_files: string[];
   progress: number;
+  /** Set for stops made from the start/end options rather than media or the stop editor. */
+  endpoint?: "start" | "end" | "return" | null;
 }
 
 export interface TripSummary {

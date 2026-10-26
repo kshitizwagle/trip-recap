@@ -2,7 +2,7 @@
 // leave the device: metadata is read locally, OSRM and Nominatim are called directly, and media URLs
 // are object URLs that live only as long as the tab.
 
-import {analyzeMedia, applyStopEdits, type AnalyzedTrip, customStopId, resolveLocation, type StopEdit, tripPayload} from "./engine/analyze.ts";
+import {analyzeMedia, applyStopEdits, type AnalyzedTrip, resolveLocation, type StopEdit, tripPayload} from "./engine/analyze.ts";
 import {randomId} from "./engine/ids.ts";
 import {extension, extractMetadata, SUPPORTED_EXTENSIONS} from "./engine/metadata/extract.ts";
 import type {MediaPoint} from "./engine/models.ts";
@@ -35,6 +35,8 @@ interface StoredTrip {
   places: Map<PlaceGranularity, Record<string, string>>;
   /** Names the user typed or picked; they win over looked-up names at every granularity. */
   customNames: Record<string, string>;
+  /** Stops created from the start/end/return options at build time. */
+  endpoints: Record<string, "start" | "end" | "return">;
 }
 
 const geocoder = new NominatimGeocoder();
@@ -66,7 +68,9 @@ function payload(tripId: string, granularity: PlaceGranularity = "neighborhood")
   for (const observation of stored.analyzed.trip.observations) {
     places[observation.id] = stored.customNames[observation.id] ?? looked[observation.id] ?? PLACE_PENDING;
   }
-  return tripPayload(stored.analyzed, places, urlsFor) as TripData;
+  const data = tripPayload(stored.analyzed, places, urlsFor) as TripData;
+  data.observations = data.observations.map((observation) => ({...observation, endpoint: stored.endpoints[observation.id] ?? null}));
+  return data;
 }
 
 export function searchLocations(query: string, signal?: AbortSignal): Promise<{results: LocationSuggestion[]}> {
@@ -135,7 +139,18 @@ export async function analyzeSession(request: AnalyzeSessionPayload): Promise<An
     },
     {router, forwardGeocode: (query) => geocoder.forward(query)},
   );
-  for (const item of analyzed) trips.set(item.trip.id, {analyzed: item, places: new Map(), customNames: {}});
+  for (const item of analyzed) {
+    const endpoints: StoredTrip["endpoints"] = {};
+    const stops = item.trip.observations;
+    const fromOptions = (index: number) => stops[index] && stops[index].media_ids.length === 0;
+    if (request.start_location && fromOptions(0)) endpoints[stops[0].id] = "start";
+    const last = stops.length - 1;
+    if (last > 0 && fromOptions(last)) {
+      if (request.return_to_start) endpoints[stops[last].id] = "return";
+      else if (request.end_location) endpoints[stops[last].id] = "end";
+    }
+    trips.set(item.trip.id, {analyzed: item, places: new Map(), customNames: {}, endpoints});
+  }
   return {trips: analyzed.map((item) => payload(item.trip.id))};
 }
 
@@ -214,16 +229,23 @@ export async function updateStops(tripId: string, stops: RouteStopInput[]): Prom
   for (const stop of stops) {
     if ("id" in stop) {
       edits.push({kind: "observation", id: stop.id});
-    } else if ("query" in stop) {
+      continue;
+    }
+    let latitude: number;
+    let longitude: number;
+    let name: string;
+    if ("query" in stop) {
       const resolved = await resolveLocation(stop.query, {router, forwardGeocode: (query) => geocoder.forward(query)});
       if (!resolved) throw new Error(`Could not find location: ${stop.query}`);
-      const name = stop.name?.trim() || shortName(stop.query);
-      names.push([customStopId(resolved[0], resolved[1], name), name]);
-      edits.push({kind: "custom", latitude: resolved[0], longitude: resolved[1], name});
+      [latitude, longitude] = resolved;
+      name = stop.name?.trim() || shortName(stop.query);
     } else {
-      names.push([customStopId(stop.latitude, stop.longitude, stop.name), stop.name]);
-      edits.push({kind: "custom", latitude: stop.latitude, longitude: stop.longitude, name: stop.name});
+      ({latitude, longitude, name} = stop);
     }
+    // Each added place gets its own id, so the same place can be added twice and removed one at a time.
+    const id = randomId();
+    names.push([id, name]);
+    edits.push({kind: "custom", latitude, longitude, name, id});
   }
   const updated = await applyStopEdits(stored.analyzed, edits, {router});
   for (const [id, name] of names) stored.customNames[id] = name;
