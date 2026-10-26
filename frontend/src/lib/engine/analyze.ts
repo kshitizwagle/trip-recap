@@ -203,7 +203,7 @@ export function tripPayload(
 /** A stop in a user-edited route: an existing observation, or a place the user added. */
 export type StopEdit =
   | {kind: "observation"; id: string}
-  | {kind: "custom"; latitude: number; longitude: number; name: string};
+  | {kind: "custom"; latitude: number; longitude: number; name: string; id?: string};
 
 export function customStopId(latitude: number, longitude: number, name: string): string {
   return uuid5(`custom:${latitude.toFixed(6)}:${longitude.toFixed(6)}:${name}`);
@@ -231,7 +231,7 @@ export async function applyStopEdits(
     if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) continue;
     const when = observations[observations.length - 1]?.departure ?? fallbackTime;
     observations.push({
-      id: customStopId(stop.latitude, stop.longitude, stop.name),
+      id: stop.id ?? customStopId(stop.latitude, stop.longitude, stop.name),
       arrival: when,
       departure: when,
       latitude: stop.latitude,

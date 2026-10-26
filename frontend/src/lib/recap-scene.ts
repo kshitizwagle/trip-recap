@@ -113,6 +113,8 @@ const AURA = {
 };
 const FONT_MONO = '"IBM Plex Mono", ui-monospace, monospace';
 const FONT_SERIF = 'Fraunces, Georgia, serif';
+/** Vehicle value that draws the chevron arrow instead of an emoji. */
+export const ARROW = "arrow";
 const FONT_EMOJI = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 
 type LngLat = [number, number];
@@ -447,6 +449,32 @@ export class RecapScene {
     ctx.beginPath();
     ctx.arc(p.x, p.y, 36 * unit, 0, Math.PI * 2);
     ctx.fill();
+    if (options.vehicle === ARROW) {
+      // The arrow from the first trip-map design: a notched chevron pointing along the road.
+      const dx = next.x - p.x;
+      const dy = next.y - p.y;
+      if (Math.hypot(dx, dy) > 0.5) this.heading = Math.atan2(dy, dx);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(this.heading);
+      ctx.beginPath();
+      ctx.moveTo(12 * unit, 0);
+      ctx.lineTo(-8 * unit, -8 * unit);
+      ctx.lineTo(-3.5 * unit, 0);
+      ctx.lineTo(-8 * unit, 8 * unit);
+      ctx.closePath();
+      ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+      ctx.shadowBlur = 8 * unit;
+      ctx.fillStyle = AURA.green;
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.lineWidth = 2.2 * unit;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = AURA.ink;
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
     ctx.save();
     ctx.translate(p.x, p.y - 2 * unit);
     if (next.x < p.x - 0.5) ctx.scale(-1, 1);
@@ -459,6 +487,9 @@ export class RecapScene {
     ctx.fillText(options.vehicle, 0, 0);
     ctx.restore();
   }
+
+  /** Last travel direction, kept so the arrow doesn't snap when it sits exactly on a vertex. */
+  private heading = 0;
 
   private title(): {title: string; subtitle: string} {
     const started = this.data.summary.started_at ? new Date(this.data.summary.started_at) : null;
