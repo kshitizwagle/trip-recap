@@ -9,7 +9,7 @@ import {buildMp4File, type VideoSample} from "./engine/mp4.ts";
 import {createSceneMap, type FrameId, frameSize, type MapStyleId, RecapScene} from "./recap-scene";
 import type {TripData, TripMedia} from "./trip-types";
 
-export const EXPORT_MAX_SECONDS = 120;
+export const EXPORT_MAX_SECONDS = 300;
 export const EXPORT_QUALITIES = [720, 1080, 1440] as const;
 export const EXPORT_FRAME_RATES = [30, 60] as const;
 export type ExportQuality = (typeof EXPORT_QUALITIES)[number];
@@ -30,6 +30,8 @@ export interface ExportOptions {
   frame: FrameId;
   quality: ExportQuality;
   fps: ExportFrameRate;
+  /** Playback speed, as in the preview: 0.5 makes the MP4 twice as long. */
+  speed?: number;
   onProgress?: (progress: ExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -210,7 +212,8 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
     if (!ctx) throw new Error("Canvas 2D is unavailable");
 
     const sourceDuration = scene.duration;
-    const outputSeconds = Math.min(sourceDuration, EXPORT_MAX_SECONDS);
+    const speed = options.speed && options.speed > 0 ? options.speed : 1;
+    const outputSeconds = Math.min(sourceDuration / speed, EXPORT_MAX_SECONDS);
     const frames = Math.max(1, Math.ceil(outputSeconds * fps));
     const step = frames > 1 ? sourceDuration / (frames - 1) : 0;
     scene.resetCamera();
@@ -218,7 +221,8 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
       checkAbort();
       if (encoderError) throw encoderError;
       const time = index * step;
-      scene.updateCamera(map, time, step);
+      // Same camera smoothing per real second as the live preview.
+      scene.updateCamera(map, time, 1 / fps);
       await settle(index === 0 ? 20_000 : 8000);
 
       ctx.drawImage(map.getCanvas(), 0, 0, width, height);

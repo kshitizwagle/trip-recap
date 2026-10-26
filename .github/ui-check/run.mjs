@@ -1,6 +1,6 @@
 // End-to-end check of every control in the studio. Writes PASS/FAIL lines to shots/log.txt.
 import {chromium} from "playwright";
-import {writeFileSync, mkdirSync, statSync} from "node:fs";
+import {writeFileSync, mkdirSync, statSync, readFileSync} from "node:fs";
 import {buildJpeg, buildTiff} from "../../frontend/src/lib/engine/test-fixtures.ts";
 
 mkdirSync("shots", {recursive: true});
@@ -315,6 +315,20 @@ await step("media: discard after building", async () => {
   await page.waitForSelector(".map-canvas-frame", {timeout: 60000});
 });
 
+await step("timeline: moves start quickly and legs are not rushed", async () => {
+  const timeline = JSON.parse(readFileSync("shots/timeline.json", "utf8"));
+  const moves = timeline.events.filter((event) => event.type === "move");
+  const firstAt = moves[0]?.video_time;
+  const legs = moves.map((event) => Number(event.payload.duration_seconds).toFixed(1));
+  check("timeline: moves start quickly and legs are not rushed", firstAt < 1 && moves.every((event) => event.payload.duration_seconds >= 0.75), `first move ${firstAt}s, legs ${legs.join("/")}, total ${timeline.duration_seconds.toFixed(1)}s`);
+});
+function mp4Seconds(path) {
+  const bytes = readFileSync(path);
+  const at = bytes.indexOf(Buffer.from("mvhd"));
+  const view = new DataView(bytes.buffer, bytes.byteOffset + at + 4);
+  return view.getUint8(0) === 1 ? Number(view.getBigUint64(24)) / view.getUint32(20) : view.getUint32(16) / view.getUint32(12);
+}
+
 // Export
 await step("export: cancel", async () => {
   await page.locator("#render").click();
@@ -323,15 +337,22 @@ await step("export: cancel", async () => {
   await page.waitForSelector("#render", {timeout: 20000});
   check("export: cancel", true, await status());
 });
-await step("export: 720p 60fps 1:1", async () => {
+await step("export: ½× speed doubles the length", async () => {
   await page.locator('.grp[aria-label="Frame"]').getByRole("button", {name: "1:1"}).click();
   await page.locator('.grp[aria-label="Quality"]').getByRole("button", {name: "720p"}).click();
-  await page.locator('.grp[aria-label="FPS"]').getByRole("button", {name: "60"}).click();
+  await page.locator('.grp[aria-label="FPS"]').getByRole("button", {name: "30"}).click();
+  await page.locator('.grp[aria-label="Speed"]').getByRole("button", {name: "½×"}).click();
+  const planned = await page.locator(".exp-status").innerText();
+  const [tl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", {name: "timeline.json"}).click()]);
+  await tl.saveAs("shots/timeline-export.json");
+  const timeline = JSON.parse(readFileSync("shots/timeline-export.json", "utf8"));
   await page.locator("#render").click();
-  await page.waitForSelector("#video-download", {timeout: 900000});
+  await page.waitForSelector("#video-download", {timeout: 1200000});
   const [dl] = await Promise.all([page.waitForEvent("download"), page.locator("#video-download").click()]);
   await dl.saveAs("shots/export.mp4");
-  check("export: 720p 60fps 1:1", statSync("shots/export.mp4").size > 10000, await page.locator(".exp-status").innerText());
+  const seconds = mp4Seconds("shots/export.mp4");
+  const source = timeline.duration_seconds;
+  check("export: ½× speed doubles the length", Math.abs(seconds - source * 2) < 1.5, `mp4 ${seconds.toFixed(1)}s for a ${source.toFixed(1)}s timeline :: planned "${planned}"`);
 });
 await page.screenshot({path: "shots/7-exported.png"});
 
