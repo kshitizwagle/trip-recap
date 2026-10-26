@@ -426,3 +426,23 @@ test("an added place can be removed again, even when the same place was added tw
   assert.equal(none.trip.observations.length, 2);
   assert.equal(none.route?.segments.length, 1);
 });
+
+import {detectMediaType, sniffMediaType, extractMetadata as extractFromBlob} from "./engine/metadata/extract.ts";
+
+test("media type is recognised from bytes when a phone picker drops the extension", async () => {
+  const bytes = (...parts: Array<number[] | string>) => new Uint8Array(parts.flatMap((part) => (typeof part === "string" ? [...part].map((c) => c.charCodeAt(0)) : part)));
+  assert.equal(sniffMediaType(bytes([0xff, 0xd8, 0xff, 0xe1])), "photo");
+  assert.equal(sniffMediaType(bytes([0x89], "PNG", [13, 10, 26, 10])), "photo");
+  assert.equal(sniffMediaType(bytes("RIFF", [0, 0, 0, 0], "WEBP")), "photo");
+  assert.equal(sniffMediaType(bytes([0, 0, 0, 24], "ftypheic")), "photo");
+  assert.equal(sniffMediaType(bytes([0, 0, 0, 24], "ftypqt  ")), "video");
+  assert.equal(sniffMediaType(bytes([0, 0, 0, 24], "ftypmp42")), "video");
+  assert.equal(sniffMediaType(bytes("hello world!")), null);
+  assert.equal(detectMediaType("1000012345", "video/mp4"), "video");
+  assert.throws(() => detectMediaType("notes", "text/plain", bytes("hello world!")), /Unsupported/);
+
+  const jpeg = buildJpeg(buildTiff({dateTimeOriginal: "2026:10:24 07:00:00", latitude: 27.65, longitude: 85.32}));
+  const media = await extractFromBlob(new Blob([jpeg as BlobPart]), "1000012345", "x");
+  assert.equal(media.media_type, "photo");
+  close(media.latitude ?? 0, 27.65, 1e-6);
+});

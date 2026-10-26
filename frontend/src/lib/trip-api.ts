@@ -4,7 +4,7 @@
 
 import {analyzeMedia, applyStopEdits, type AnalyzedTrip, resolveLocation, type StopEdit, tripPayload} from "./engine/analyze.ts";
 import {randomId} from "./engine/ids.ts";
-import {extension, extractMetadata, SUPPORTED_EXTENSIONS} from "./engine/metadata/extract.ts";
+import {extractMetadata} from "./engine/metadata/extract.ts";
 import type {MediaPoint} from "./engine/models.ts";
 import {type LocationSuggestion, NominatimGeocoder, PhotonGeocoder, PLACE_GRANULARITIES, type PlaceGranularity} from "./engine/places.ts";
 import {OSRMRouter, RouteCache} from "./engine/routing.ts";
@@ -84,7 +84,6 @@ export function uploadMedia(sessionId: string, file: File, onProgress: (percent:
   let aborted = false;
   const id = randomId();
   const promise = (async (): Promise<UploadedMedia> => {
-    if (!SUPPORTED_EXTENSIONS.has(extension(file.name))) throw new Error(`Unsupported media type: ${file.name}`);
     onProgress(15);
     const media = await extractMetadata(file, file.name, id);
     if (aborted) throw new DOMException("Upload aborted", "AbortError");

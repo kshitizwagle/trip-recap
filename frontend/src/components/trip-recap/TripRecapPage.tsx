@@ -30,6 +30,7 @@ import {
   resetUploadForRetry,
 } from "@/lib/upload-queue";
 import type {TripData} from "@/lib/trip-types";
+import {randomId} from "@/lib/engine/ids";
 
 const ACCEPTED_MEDIA = ".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*";
 const VEHICLES = [ARROW, "🛵", "🚗", "🏍️", "🚲"] as const;
@@ -105,7 +106,7 @@ export default function TripRecapPage() {
   recordsRef.current = records;
 
   useEffect(() => {
-    setSessionId(crypto.randomUUID());
+    setSessionId(randomId());
     setExportSupported(canExportVideo());
   }, []);
 
@@ -189,7 +190,7 @@ export default function TripRecapPage() {
       clearResult();
       const {accepted, rejected} = partitionFiles(files);
       const nextRecords: MediaUploadRecord[] = accepted.map((file) => ({
-        clientId: crypto.randomUUID(),
+        clientId: randomId(),
         file,
         status: "queued",
         discarded: false,
@@ -229,6 +230,7 @@ export default function TripRecapPage() {
     [records],
   );
   const readyToAnalyze = canAnalyze(records);
+  const missingGps = retainedRecords.filter((record) => record.evidence && !record.evidence.hasGps).length;
 
   const analyze = useCallback(async () => {
     if (!sessionId || !readyToAnalyze) return;
@@ -413,6 +415,18 @@ export default function TripRecapPage() {
       ? `${retainedRecords.length} of ${records.length} files read · build the route when ready`
       : "Photos and videos in, animated route map out";
 
+  const gpsNote = missingGps > 0 && (
+    <div className="gps-note" role="note">
+      <strong>{missingGps === retainedRecords.length ? "None of these files have a location." : `${missingGps} of ${retainedRecords.length} files have no location.`}</strong>
+      <span>Phones often remove location when you pick from the photo gallery.</span>
+      <ul>
+        <li><b>iPhone:</b> in the photo picker, tap <b>Options</b> at the top and turn on <b>Location</b>, then select the photos again.</li>
+        <li><b>Android:</b> pick the files through <b>Browse</b> / the Files app, or from Google Drive, instead of the Photos picker.</li>
+      </ul>
+      <span>{missingGps === retainedRecords.length ? "You can still build a route by setting a start and end point below." : "Files without a location are left off the map."}</span>
+    </div>
+  );
+
   const buildButton = (
     <button type="button" id="analyze" className={trip ? "btn" : "btn primary"} disabled={!readyToAnalyze || busy} onClick={analyze}>
       {analyzing ? "Tracing route…" : trip ? "Rebuild route" : "Build route"}
@@ -501,6 +515,7 @@ export default function TripRecapPage() {
                 <Segmented label="Place names" value={placeDetail} options={PLACE_DETAILS.map((value) => ({value, label: PLACE_DETAIL_LABELS[value]}))} onChange={setPlaceDetail} />
                 {routeOptions}
                 <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                {gpsNote}
                 <div className="controls">
                   {(["trip", "route", "timeline"] as JsonTab[]).map((kind) => (
                     <button key={kind} type="button" className="btn small" onClick={() => download(new Blob([JSON.stringify(jsonValues[kind], null, 2)], {type: "application/json"}), kind === "route" ? "route.geojson" : `${kind}.json`)}>
@@ -535,6 +550,7 @@ export default function TripRecapPage() {
             {records.length > 0 && (
               <div className="empty-setup">
                 <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                {gpsNote}
                 {routeOptions}
                 <div className="controls">
                   {buildButton}

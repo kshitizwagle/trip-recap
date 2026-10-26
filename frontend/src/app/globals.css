@@ -201,3 +201,7 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 .editor-note { border: 1px solid var(--aura-border); border-radius: 6px; background: var(--aura-bg); }
+.gps-note { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid rgba(255, 202, 133, 0.35); border-radius: 8px; background: rgba(255, 202, 133, 0.06); color: var(--aura-muted); font-size: 12.5px; line-height: 1.5; }
+.gps-note strong { color: var(--aura-warning); font-weight: 600; }
+.gps-note ul { margin: 0; padding-left: 18px; }
+.gps-note b { color: var(--aura-fg); font-weight: 600; }
