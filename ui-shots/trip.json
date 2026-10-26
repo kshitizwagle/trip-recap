@@ -1,0 +1,148 @@
+{
+  "id": "f8f70bf9-f97d-5209-9768-a97344a99713",
+  "started_at": "2026-10-24T07:00:00+05:45",
+  "ended_at": "2026-10-24T10:00:00",
+  "stats": {
+    "media_count": 5,
+    "photo_count": 5,
+    "video_count": 0,
+    "gps_media_count": 4,
+    "distance_meters": 34043.28646489829,
+    "real_duration_seconds": 31500,
+    "video_duration_seconds": 28.48128611039001
+  },
+  "observations": [
+    {
+      "id": "73e70414-e2ad-538e-a04c-640747f4b911",
+      "arrival": "2026-10-24T07:00:00+05:45",
+      "departure": "2026-10-24T07:00:00+05:45",
+      "latitude": 27.6587525,
+      "longitude": 85.32471830555555,
+      "media_ids": [
+        "ff06ba8b-a621-46d3-bbe3-fe890d983f26"
+      ]
+    },
+    {
+      "id": "548bb761-ae5f-594a-88c6-b9f7382486db",
+      "arrival": "2026-10-24T08:10:00+05:45",
+      "departure": "2026-10-24T08:10:00+05:45",
+      "latitude": 27.612806805555557,
+      "longitude": 85.264486,
+      "media_ids": [
+        "84d27571-a74c-46ee-9416-e39511fd6a20"
+      ]
+    },
+    {
+      "id": "cf5e8846-7963-5f0f-82b0-c36c7b2d9ddf",
+      "arrival": "2026-10-24T09:00:00+05:45",
+      "departure": "2026-10-24T09:00:00+05:45",
+      "latitude": 27.596667,
+      "longitude": 85.22048511111112,
+      "media_ids": [
+        "ad941104-8469-4204-afe5-eeac302800a9"
+      ]
+    },
+    {
+      "id": "e64e4d3e-2c3c-517d-bc71-31aa34c99476",
+      "arrival": "2026-10-24T11:30:00+05:45",
+      "departure": "2026-10-24T11:30:00+05:45",
+      "latitude": 27.49645061111111,
+      "longitude": 85.03373919444444,
+      "media_ids": [
+        "4dc6d156-001e-498e-a6c0-2661c9219be6"
+      ]
+    }
+  ],
+  "media": [
+    {
+      "id": "ff06ba8b-a621-46d3-bbe3-fe890d983f26",
+      "filename": "01-home.jpg",
+      "media_type": "photo",
+      "captured_at": "2026-10-24T07:00:00+05:45",
+      "timestamp_source": "DateTimeOriginal",
+      "latitude": 27.6587525,
+      "longitude": 85.32471830555555,
+      "altitude": null,
+      "direction": null,
+      "duration_seconds": null,
+      "width": null,
+      "height": null,
+      "gps_quality": "valid",
+      "metadata_warnings": [],
+      "url": "blob:http://127.0.0.1:4173/c3f0124b-220a-4327-a08d-f45647042950",
+      "preview_url": "blob:http://127.0.0.1:4173/c3f0124b-220a-4327-a08d-f45647042950"
+    },
+    {
+      "id": "84d27571-a74c-46ee-9416-e39511fd6a20",
+      "filename": "02-pharping.jpg",
+      "media_type": "photo",
+      "captured_at": "2026-10-24T08:10:00+05:45",
+      "timestamp_source": "DateTimeOriginal",
+      "latitude": 27.612806805555557,
+      "longitude": 85.264486,
+      "altitude": null,
+      "direction": null,
+      "duration_seconds": null,
+      "width": null,
+      "height": null,
+      "gps_quality": "valid",
+      "metadata_warnings": [],
+      "url": "blob:http://127.0.0.1:4173/86d3c885-819c-4119-8092-302a44cbb875",
+      "preview_url": "blob:http://127.0.0.1:4173/86d3c885-819c-4119-8092-302a44cbb875"
+    },
+    {
+      "id": "ad941104-8469-4204-afe5-eeac302800a9",
+      "filename": "03-fakhel.jpg",
+      "media_type": "photo",
+      "captured_at": "2026-10-24T09:00:00+05:45",
+      "timestamp_source": "DateTimeOriginal",
+      "latitude": 27.596667,
+      "longitude": 85.22048511111112,
+      "altitude": null,
+      "direction": null,
+      "duration_seconds": null,
+      "width": null,
+      "height": null,
+      "gps_quality": "valid",
+      "metadata_warnings": [],
+      "url": "blob:http://127.0.0.1:4173/61086298-ab39-495b-b281-4328f937a1af",
+      "preview_url": "blob:http://127.0.0.1:4173/61086298-ab39-495b-b281-4328f937a1af"
+    },
+    {
+      "id": "4dc6d156-001e-498e-a6c0-2661c9219be6",
+      "filename": "04-bhainse.jpg",
+      "media_type": "photo",
+      "captured_at": "2026-10-24T11:30:00+05:45",
+      "timestamp_source": "DateTimeOriginal",
+      "latitude": 27.49645061111111,
+      "longitude": 85.03373919444444,
+      "altitude": null,
+      "direction": null,
+      "duration_seconds": null,
+      "width": null,
+      "height": null,
+      "gps_quality": "valid",
+      "metadata_warnings": [],
+      "url": "blob:http://127.0.0.1:4173/c9a9cf4d-27d6-43fd-b730-228c7af46b0d",
+      "preview_url": "blob:http://127.0.0.1:4173/c9a9cf4d-27d6-43fd-b730-228c7af46b0d"
+    },
+    {
+      "id": "b3d152c0-73b0-4ab7-9e18-28b5b9f4fecc",
+      "filename": "no-gps.jpg",
+      "media_type": "photo",
+      "captured_at": "2026-10-24T10:00:00",
+      "timestamp_source": "DateTimeOriginal",
+      "latitude": null,
+      "longitude": null,
+      "altitude": null,
+      "direction": null,
+      "duration_seconds": null,
+      "width": null,
+      "height": null,
+      "gps_quality": "missing",
+      "metadata_warnings": [],
+      "url": "blob:http://127.0.0.1:4173/8d7b14a5-51ba-44d6-94c4-1d3655630e93",
+      "preview_url": "blob:http://127.0.0.1:4173/8d7b14a5-51ba-44d6-94c4-1d3655630e93"
+    }
+  ]
+}
