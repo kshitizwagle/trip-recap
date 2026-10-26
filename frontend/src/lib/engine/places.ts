@@ -181,3 +181,55 @@ export class NominatimGeocoder {
     return result ?? null;
   }
 }
+
+interface PhotonProperties {
+  name?: string;
+  street?: string;
+  housenumber?: string;
+  locality?: string;
+  district?: string;
+  city?: string;
+  county?: string;
+  state?: string;
+}
+
+export function formatPhotonPlace(properties: PhotonProperties, granularity: PlaceGranularity = "neighborhood"): string | null {
+  const pick = (...values: Array<string | undefined>) => beforeComma(values.find((value) => value && value.trim()) ?? null);
+  if (granularity === "specific") return pick(properties.name, properties.street, properties.locality, properties.district, properties.city);
+  if (granularity === "neighborhood") return pick(properties.locality, properties.district, properties.city, properties.name);
+  if (granularity === "city") return pick(properties.city, properties.district, properties.locality, properties.county);
+  return pick(properties.county, properties.state, properties.city, properties.district);
+}
+
+/** Photon (komoot) reverse geocoding, used when Nominatim fails or rate-limits. */
+export class PhotonGeocoder {
+  private readonly baseUrl: string;
+  private readonly fetcher: FetchLike;
+  private readonly cache = new Map<string, Promise<PhotonProperties | null>>();
+
+  constructor(options: {baseUrl?: string; fetch?: FetchLike} = {}) {
+    this.baseUrl = (options.baseUrl ?? "https://photon.komoot.io").replace(/\/+$/, "");
+    this.fetcher = options.fetch ?? ((input, init) => fetch(input, init));
+  }
+
+  private properties(latitude: number, longitude: number): Promise<PhotonProperties | null> {
+    const key = NominatimGeocoder.cacheKey(latitude, longitude);
+    let cached = this.cache.get(key);
+    if (!cached) {
+      cached = (async () => {
+        const response = await this.fetcher(`${this.baseUrl}/reverse?lat=${latitude}&lon=${longitude}&lang=en`);
+        if (!response.ok) throw new Error(`Photon HTTP ${response.status}`);
+        const payload = (await response.json()) as {features?: Array<{properties?: PhotonProperties}>};
+        return payload.features?.[0]?.properties ?? null;
+      })();
+      cached.catch(() => this.cache.delete(key));
+      this.cache.set(key, cached);
+    }
+    return cached;
+  }
+
+  async reverse(latitude: number, longitude: number, granularity: PlaceGranularity = "neighborhood"): Promise<string | null> {
+    const properties = await this.properties(latitude, longitude);
+    return properties ? formatPhotonPlace(properties, granularity) : null;
+  }
+}

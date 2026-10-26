@@ -1,3 +1,4 @@
+name = "trip-recap"
 compatibility_date = "2026-09-18"
 
 # Static export served as Workers static assets (deploy: `npx wrangler deploy --assets=./out`).

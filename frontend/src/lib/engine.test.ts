@@ -328,3 +328,68 @@ test("analyzeMedia builds a trip payload with inferred route and keeps routing e
     /Could not find location: Nowhere/,
   );
 });
+
+import {playbackStateAt} from "./engine/timeline.ts";
+
+test("playback eases between stops and holds while media shows", () => {
+  const [trip] = new TripBuilder().build([point("a", 0, 40.75, -74.0), point("b", 120, 40.78, -73.97), point("c", 240, 40.8, -73.95)]);
+  const timeline = new TimelineBuilder().build(trip);
+  const observations = trip.observations.map((item, i) => ({id: item.id, progress: [0, 0.4, 1][i]}));
+  const moves = timeline.events.filter((event) => event.type === "move");
+  assert.equal(playbackStateAt(timeline, observations, 0).phase, "intro");
+  assert.equal(playbackStateAt(timeline, observations, 0).progress, 0);
+  const first = moves[0];
+  const mid = playbackStateAt(timeline, observations, first.video_time + Number(first.payload.duration_seconds) / 2);
+  assert.equal(mid.phase, "move");
+  close(mid.progress, 0.2, 1e-9);
+  assert.equal(mid.toIndex, 1);
+  const holding = playbackStateAt(timeline, observations, first.video_time + Number(first.payload.duration_seconds) + 0.5);
+  assert.equal(holding.phase, "stop");
+  assert.equal(holding.progress, 0.4);
+  assert.equal(holding.atIndex, 1);
+  const end = playbackStateAt(timeline, observations, timeline.duration_seconds);
+  assert.equal(end.phase, "outro");
+  assert.equal(end.progress, 1);
+  assert.equal(end.atIndex, 2);
+});
+
+import {applyStopEdits, customStopId} from "./engine/analyze.ts";
+
+test("stops can be reordered and custom places added, with sane move timings", async () => {
+  const media = [point("a", 0, 40.75, -74.0), point("b", 60, 40.78, -73.97), point("c", 120, 40.8, -73.95)];
+  const services = {
+    router: {route: async (start: {latitude: number; longitude: number}, end: {latitude: number; longitude: number}, s: string, e: string) => ({
+      start_observation_id: s, end_observation_id: e, geometry: [start, end], distance_meters: 1000, duration_seconds: 60, routing_profile: "driving", inferred: true as const,
+    })},
+    forwardGeocode: async () => null,
+  };
+  const [analyzed] = await analyzeMedia(media, {keepAsOneTrip: true, startLocation: null, endLocation: null, returnToStart: false}, services);
+  const [a, b, c] = analyzed.trip.observations.map((item) => item.id);
+  const edited = await applyStopEdits(analyzed, [
+    {kind: "observation", id: c},
+    {kind: "custom", latitude: 40.77, longitude: -73.98, name: "Lunch spot"},
+    {kind: "observation", id: a},
+    {kind: "observation", id: b},
+  ], services);
+  assert.deepEqual(edited.trip.observations.map((item) => item.id), [c, customStopId(40.77, -73.98, "Lunch spot"), a, b]);
+  assert.equal(edited.route?.segments.length, 3);
+  const moves = edited.timeline.events.filter((event) => event.type === "move");
+  assert.equal(moves.length, 3);
+  assert.ok(moves.every((event) => Number(event.payload.duration_seconds) >= 0.5), "reordered moves still take visible time");
+  assert.equal(analyzed.trip.observations[0].id, a, "the original trip is not mutated");
+});
+
+import {formatPhotonPlace, PhotonGeocoder} from "./engine/places.ts";
+
+test("Photon fallback formats places by granularity", async () => {
+  const properties = {name: "Satdobato Chowk", street: "Kathmandu Ringroad", locality: "Ekantakuna", district: "Lalitpur-13", city: "Lalitpur", state: "Bagmati Province"};
+  assert.equal(formatPhotonPlace(properties, "specific"), "Satdobato Chowk");
+  assert.equal(formatPhotonPlace(properties, "neighborhood"), "Ekantakuna");
+  assert.equal(formatPhotonPlace(properties, "city"), "Lalitpur");
+  assert.equal(formatPhotonPlace(properties, "region"), "Bagmati Province");
+  const photon = new PhotonGeocoder({fetch: async (url) => {
+    assert.match(url, /photon\.komoot\.io\/reverse\?lat=27\.6588&lon=85\.3247&lang=en/);
+    return Response.json({features: [{properties}]});
+  }});
+  assert.equal(await photon.reverse(27.6588, 85.3247, "city"), "Lalitpur");
+});
