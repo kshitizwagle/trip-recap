@@ -21,14 +21,19 @@ import {Toaster, toast} from "sonner";
 import LocationAutocomplete from "@/components/trip-recap/LocationAutocomplete";
 import MapPreview, {type MapPreviewHandle} from "@/components/trip-recap/MapPreview";
 import MediaQueue, {type MediaUploadRecord} from "@/components/trip-recap/MediaQueue";
+import StopEditor from "@/components/trip-recap/StopEditor";
+import {FRAME_IDS, FRAMES, type FrameId, MAP_STYLE_IDS, MAP_STYLES, type MapStyleId} from "@/lib/recap-scene";
 import {
   analyzeSession,
   discardUploadedMedia,
   fetchPlaces,
+  renameStop,
+  updateStops,
+  type RouteStopInput,
   uploadMedia,
   type UploadRequest,
 } from "@/lib/trip-api";
-import {canExportVideo, EXPORT_FPS, EXPORT_HEIGHT, EXPORT_MAX_SECONDS, EXPORT_WIDTH, exportRecapVideo, type ExportProgress} from "@/lib/recap-export";
+import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_MAX_SECONDS, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
 import {
   MAX_CONCURRENT_UPLOADS,
   MAX_FILE_LABEL,
@@ -39,7 +44,6 @@ import {
 import type {TripData} from "@/lib/trip-types";
 
 const ACCEPTED_MEDIA = ".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*";
-const MAP_STYLES = ["Street", "Satellite", "Hybrid"] as const;
 const VEHICLES = ["🛵", "🚗", "🏍️", "🚲", "🚙"] as const;
 const PLACE_DETAILS = ["specific", "neighborhood", "city", "region"] as const;
 const STEPS = [
@@ -48,7 +52,6 @@ const STEPS = [
   {id: "Look", number: "03", title: "Look"},
   {id: "Export", number: "04", title: "Export"},
 ] as const;
-type MapStyle = (typeof MAP_STYLES)[number];
 type Vehicle = (typeof VEHICLES)[number];
 type PlaceDetail = (typeof PLACE_DETAILS)[number];
 type JsonTab = "trip" | "route" | "timeline";
@@ -111,11 +114,14 @@ export default function TripRecapPage() {
   const [returnToStart, setReturnToStart] = useState(false);
   const [startLocation, setStartLocation] = useState("");
   const [endLocation, setEndLocation] = useState("");
-  const [mapStyle, setMapStyle] = useState<MapStyle>("Street");
+  const [styleId, setStyleId] = useState<MapStyleId>("dark");
+  const [frame, setFrame] = useState<FrameId>("portrait");
+  const [quality, setQuality] = useState<ExportQuality>(1080);
+  const [fps, setFps] = useState<ExportFrameRate>(30);
+  const [editingRoute, setEditingRoute] = useState(false);
   const [vehicle, setVehicle] = useState<Vehicle>("🛵");
   const [placeDetail, setPlaceDetail] = useState<PlaceDetail>("neighborhood");
   const [playbackSpeed, setPlaybackSpeed] = useState("1");
-  const [slowPoints, setSlowPoints] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [video, setVideo] = useState<{url: string; blob: Blob} | null>(null);
@@ -290,7 +296,16 @@ export default function TripRecapPage() {
 
   const refreshPlaces = useCallback(async (target: TripData, granularity: PlaceDetail) => {
     try {
-      const response = await fetchPlaces(target.id, granularity);
+      const apply = (places: Record<string, string>) =>
+        setTrip((current) => {
+          if (!current || current.id !== target.id) return current;
+          return {
+            ...current,
+            place_names: places,
+            observations: current.observations.map((observation) => ({...observation, place: places[observation.id] ?? observation.place})),
+          };
+        });
+      const response = await fetchPlaces(target.id, granularity, apply);
       setTrip((current) => {
         if (!current || current.id !== target.id) return current;
         return {
@@ -310,7 +325,75 @@ export default function TripRecapPage() {
   useEffect(() => {
     if (!trip) return;
     void refreshPlaces(trip, placeDetail);
-  }, [placeDetail, refreshPlaces, trip?.id]);
+  }, [placeDetail, refreshPlaces, trip?.id, trip?.observations.length]);
+
+  const editStops = useCallback(
+    async (stops: RouteStopInput[], message: string) => {
+      if (!trip) return;
+      setEditingRoute(true);
+      setStatus("Re-tracing the route…");
+      setStatusTone("neutral");
+      try {
+        const next = await updateStops(trip.id, stops);
+        setTrip(next);
+        setVideo(null);
+        setStatus(message);
+        setStatusTone("success");
+      } catch (error: unknown) {
+        const text = error instanceof Error ? error.message : "Could not update the route";
+        setStatus(text);
+        setStatusTone("error");
+        toast.error(text);
+      } finally {
+        setEditingRoute(false);
+      }
+    },
+    [trip],
+  );
+
+  const moveStop = useCallback(
+    (index: number, delta: -1 | 1) => {
+      if (!trip) return;
+      const ids = trip.observations.map((item) => ({id: item.id}));
+      const target = index + delta;
+      if (target < 0 || target >= ids.length) return;
+      [ids[index], ids[target]] = [ids[target], ids[index]];
+      void editStops(ids, "Stops reordered.");
+    },
+    [editStops, trip],
+  );
+
+  const removeStop = useCallback(
+    (index: number) => {
+      if (!trip) return;
+      void editStops(trip.observations.filter((_, i) => i !== index).map((item) => ({id: item.id})), "Stop removed from the route.");
+    },
+    [editStops, trip],
+  );
+
+  const addStop = useCallback(
+    (query: string, position: number) => {
+      if (!trip) return;
+      const stops: RouteStopInput[] = trip.observations.map((item) => ({id: item.id}));
+      stops.splice(Math.max(0, Math.min(position, stops.length)), 0, {query});
+      void editStops(stops, "Place added to the route.");
+    },
+    [editStops, trip],
+  );
+
+  const renamePoint = useCallback(
+    async (observationId: string, name: string) => {
+      if (!trip) return;
+      try {
+        const next = await renameStop(trip.id, observationId, name);
+        setTrip((current) => (current && current.id === next.id ? {...current, observations: current.observations.map((item) => ({...item, place: next.observations.find((o) => o.id === item.id)?.place ?? item.place}))} : current));
+        if (!name.trim()) void refreshPlaces(next, placeDetail);
+      } catch {
+        toast.error("Could not rename that stop");
+      }
+    },
+    [placeDetail, refreshPlaces, trip],
+  );
 
   const requestExport = useCallback(async () => {
     if (!trip || exporting || analyzing) return;
@@ -321,7 +404,7 @@ export default function TripRecapPage() {
     setStatus("Rendering your recap in this browser…");
     setStatusTone("neutral");
     try {
-      const blob = await exportRecapVideo(trip, {vehicle, signal: controller.signal, onProgress: setExportProgress});
+      const blob = await exportRecapVideo(trip, {vehicle, styleId, frame, quality, fps, signal: controller.signal, onProgress: setExportProgress});
       setVideo({url: URL.createObjectURL(blob), blob});
       setStatus("MP4 ready to download.");
       setStatusTone("success");
@@ -336,7 +419,7 @@ export default function TripRecapPage() {
       exportAbortRef.current = null;
       setExportProgress(null);
     }
-  }, [analyzing, exporting, trip, vehicle]);
+  }, [analyzing, exporting, fps, frame, quality, styleId, trip, vehicle]);
 
   const jsonValues = useMemo<Record<JsonTab, unknown>>(
     () => ({trip: trip?.trip ?? null, route: trip?.route ?? null, timeline: trip?.timeline ?? null}),
@@ -412,21 +495,7 @@ export default function TripRecapPage() {
                   <CheckboxInput id="return-start" label="Return to the start" value={returnToStart} onChange={setReturnToStart} size="sm" />
                   <CheckboxInput id="keep-one" label="Keep media together as one trip" value={keepAsOneTrip} onChange={setKeepAsOneTrip} size="sm" />
                   {trip ? (
-                    <Stack gap={3}>
-                      <Text className="eyebrow">{trip.summary.stop_count} observed points</Text>
-                      <Stack as="ol" gap={0} className="editor-stops">
-                        {trip.observations.map((observation) => (
-                          <Stack as="li" key={observation.id} direction="horizontal" gap={3} paddingBlock={3}>
-                            <Text className="editor-stop-number">{String(observation.order).padStart(2, "0")}</Text>
-                            <Stack gap={1}>
-                              <Text weight="medium">{observation.place}</Text>
-                              <Text type="supporting">{observation.media_files.join(", ") || "Endpoint you entered"}</Text>
-                              <Text type="supporting">{formatDate(observation.arrival)}</Text>
-                            </Stack>
-                          </Stack>
-                        ))}
-                      </Stack>
-                    </Stack>
+                    <StopEditor trip={trip} busy={busy || editingRoute} onMove={moveStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
                   ) : (
                     <Text type="supporting">Build the route to see the points your media recorded.</Text>
                   )}
@@ -437,22 +506,26 @@ export default function TripRecapPage() {
                     <Heading level={2}>Set the scene</Heading>
                     <Text color="secondary">These change the preview right away.</Text>
                   </Stack>
-                  <Selector id="map-style" label="Map style" options={[...MAP_STYLES]} value={mapStyle} onChange={(value) => setMapStyle(value as MapStyle)} width="100%" />
+                  <Selector id="map-style" label="Map style" options={MAP_STYLE_IDS.map((id) => MAP_STYLES[id].label)} value={MAP_STYLES[styleId].label} onChange={(value) => setStyleId(MAP_STYLE_IDS.find((id) => MAP_STYLES[id].label === value) ?? "dark")} width="100%" />
+                  <Selector id="frame" label="Frame" options={FRAME_IDS.map((id) => `${FRAMES[id].label} · ${id}`)} value={`${FRAMES[frame].label} · ${frame}`} onChange={(value) => setFrame(FRAME_IDS.find((id) => value.endsWith(id)) ?? "portrait")} width="100%" />
                   <Selector id="place-detail" label="Place-name detail" options={PLACE_DETAILS.map(placeDetailLabel)} value={placeDetailLabel(placeDetail)} onChange={(value) => setPlaceDetail(PLACE_DETAILS.find((item) => placeDetailLabel(item) === value) ?? "neighborhood")} width="100%" />
                   <Selector id="vehicle" label="Vehicle" options={VEHICLES.map(vehicleLabel)} value={vehicleLabel(vehicle)} onChange={(value) => setVehicle(VEHICLES.find((item) => vehicleLabel(item) === value) ?? "🛵")} width="100%" />
                   <Selector id="playback-speed" label="Playback speed" options={["0.5×", "1×", "1.5×", "2×", "3×"]} value={`${playbackSpeed}×`} onChange={(value) => setPlaybackSpeed(value.replace("×", ""))} width="100%" />
-                  <CheckboxInput id="slow-points" label="Slow down at photo stops" value={slowPoints} onChange={setSlowPoints} size="sm" />
+                  <Text type="supporting">The preview and the MP4 use the same style, frame and vehicle.</Text>
                 </Stack>
 
                 <Stack id="panel-Export" role="tabpanel" aria-labelledby="tab-Export" hidden={step !== "Export"} gap={5}>
                   <Stack gap={2}>
                     <Heading level={2}>Take it with you</Heading>
-                    <Text color="secondary">Render a vertical MP4 here in the browser, ready to share.</Text>
+                    <Text color="secondary">Render an MP4 here in the browser, exactly as the preview plays.</Text>
                   </Stack>
+                  <Selector id="export-frame" label="Frame" options={FRAME_IDS.map((id) => `${FRAMES[id].label} · ${id}`)} value={`${FRAMES[frame].label} · ${frame}`} onChange={(value) => setFrame(FRAME_IDS.find((id) => value.endsWith(id)) ?? "portrait")} width="100%" />
+                  <Selector id="quality" label="Quality" options={EXPORT_QUALITIES.map((value) => `${value}p`)} value={`${quality}p`} onChange={(value) => setQuality((Number.parseInt(value, 10) as ExportQuality) || 1080)} width="100%" />
+                  <Selector id="fps" label="Frame rate" options={EXPORT_FRAME_RATES.map((value) => `${value} FPS`)} value={`${fps} FPS`} onChange={(value) => setFps((Number.parseInt(value, 10) as ExportFrameRate) || 30)} width="100%" />
                   <Stack className="editor-note" padding={4} gap={1}>
-                    <Text className="eyebrow">portrait · 9:16</Text>
-                    <Text type="supporting">{EXPORT_WIDTH} × {EXPORT_HEIGHT} · {EXPORT_FPS} FPS · H.264 MP4 · up to {EXPORT_MAX_SECONDS} s</Text>
-                    <Text type="supporting">Uses the saved timeline, the street map and your chosen vehicle. Keep this tab open while it renders.</Text>
+                    <Text className="eyebrow">{FRAMES[frame].label} · {MAP_STYLES[styleId].label.toLowerCase()} map</Text>
+                    <Text type="supporting">{exportDimensions(frame, quality).join(" × ")} · {fps} FPS · H.264 MP4 · up to {EXPORT_MAX_SECONDS} s</Text>
+                    <Text type="supporting">Keep this tab open while it renders. Higher quality and 60 FPS take longer.</Text>
                   </Stack>
                   {!exportSupported && <Text type="supporting" className="status-error">This browser cannot encode video. Use a recent Chrome, Edge or Safari.</Text>}
                   {exporting ? (
@@ -512,7 +585,7 @@ export default function TripRecapPage() {
 
               <Stack className="editor-stage" gap={0}>
                 {trip ? (
-                  <MapPreview ref={mapRef} data={trip} mapStyle={mapStyle} vehicle={vehicle} playbackSpeed={Number(playbackSpeed)} slowPoints={slowPoints} />
+                  <MapPreview ref={mapRef} data={trip} styleId={styleId} frame={frame} vehicle={vehicle} playbackSpeed={Number(playbackSpeed)} />
                 ) : (
                   <Stack className="editor-empty" hAlign="center" vAlign="center" gap={6} padding={8}>
                     <Stack gap={3} hAlign="center" className="editor-empty-copy">
@@ -542,8 +615,8 @@ export default function TripRecapPage() {
                 <>
                   <Stack direction="horizontal" hAlign="between" vAlign="center" gap={3} wrap="wrap">
                     <Stack direction="horizontal" gap={2} vAlign="center" wrap="wrap">
-                      <Button id="replay" label="Play route" icon={<Text aria-hidden="true">▶</Text>} variant="primary" size="sm" onClick={() => mapRef.current?.replayRoute()} />
-                      <Button id="fit" label="Fit route" variant="ghost" size="sm" onClick={() => mapRef.current?.fitRoute(500)} />
+                      <Button id="replay" label="Replay" icon={<Text aria-hidden="true">↺</Text>} variant="primary" size="sm" onClick={() => mapRef.current?.replayRoute()} />
+                      <Button id="fit" label="Show whole route" variant="ghost" size="sm" onClick={() => mapRef.current?.fitRoute()} />
                     </Stack>
                     <Stack direction="horizontal" gap={3} vAlign="center" className="editor-legend">
                       <Text type="supporting"><span className="legend-swatch legend-observed" aria-hidden="true" /> recorded point</Text>
