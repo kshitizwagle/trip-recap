@@ -1,6 +1,0 @@
-summary: 4 stops · 79.9 km · 8.8 h · 4/5 geotagged
-stops: Tutepani,Dakshinkali,Indrasarowar,Bhainse
-after reorder: Dakshinkali,Tutepani,Indrasarowar,Bhainse :: Stops reordered.
-after add: Dakshinkali,Tutepani,Indrasarowar,Bhainse,Lumbini Palace Resort :: Place added to the route.
-webcodecs: true
-export: Download MP4/home/runner/work/_temp/dfa51a02-3da7-47e3-b8c7-4f668ba469e7.sh: line 1: ffprobe: command not found
