@@ -392,7 +392,7 @@ export default function TripRecapPage() {
                 <Stack id="panel-Media" role="tabpanel" aria-labelledby="tab-Media" hidden={step !== "Media"} gap={5}>
                   <Stack gap={2}>
                     <Heading level={2}>Start with the camera roll</Heading>
-                    <Text color="secondary">{records.length || trip ? "Add more, or remove anything you don't want on the map." : "Drop originals into the stage on the right. Their GPS and capture times draw the route."}</Text>
+                    <Text color="secondary">{records.length || trip ? "Add more, or remove anything you don't want on the map." : "Drop your originals into the map stage. Their GPS and capture times draw the route."}</Text>
                   </Stack>
                   {(records.length > 0 || trip) && uploadInput}
                   <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
