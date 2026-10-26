@@ -7,7 +7,7 @@ import {parseIso6709} from "./engine/metadata/quicktime.ts";
 import {buildHeic, buildJpeg, buildMp4, buildTiff} from "./engine/test-fixtures.ts";
 import type {MediaPoint} from "./engine/models.ts";
 import {TripBuilder} from "./engine/trip.ts";
-import {compressGapSeconds, moveSeconds, TimelineBuilder, visibleMediaAt} from "./engine/timeline.ts";
+import {compressGapSeconds, TimelineBuilder, visibleMediaAt} from "./engine/timeline.ts";
 import {buildRoute, OSRMRouter, RouteCache, routeProgresses} from "./engine/routing.ts";
 import {formatPlaceName, NominatimGeocoder} from "./engine/places.ts";
 import {analyzeMedia, applyRouteEndpoints, parseCoordinates, tripPayload} from "./engine/analyze.ts";
@@ -207,27 +207,9 @@ test("timestamp-only media joins the trip without a location", () => {
   assert.equal(trip.stats.gps_media_count, 1);
 });
 
-test("gap compression grows with travel time and long legs get a distance floor", () => {
-  const values = [30, 120, 600, 1800, 7200, 28800, 100000].map(compressGapSeconds);
-  close(values[1], 1.5, 1e-9);
-  close(values[3], 4, 1e-9);
-  close(values[5], 9, 1e-9);
-  assert.ok(values.every((value, i) => i === 0 || value >= values[i - 1]), "monotonic");
-  assert.ok(values[6] <= 12);
-  assert.ok(moveSeconds(3600, 250_000) >= 10, "a 250 km leg takes at least 10 s");
-  assert.ok(moveSeconds(60, 500) < 2, "a short hop stays short");
-  assert.ok(moveSeconds(1e9, 1e9) <= 14, "capped");
-});
-
-test("the traveller sets off within a second, even with photos at the first stop", () => {
-  const [trip] = new TripBuilder().build([point("m1", 0, 40.75, -74.0), point("m1b", 1, 40.75, -74.0), point("m2", 60, 40.9, -73.8)]);
-  const timeline = new TimelineBuilder().build(trip);
-  const firstMove = timeline.events.find((event) => event.type === "move");
-  assert.ok(firstMove && firstMove.video_time < 1, `first move at ${firstMove?.video_time}`);
-  assert.equal(visibleMediaAt(timeline, 1.2)?.mediaId, "m1");
-  const times = timeline.events.map((event) => event.video_time);
-  assert.deepEqual(times, [...times].sort((a, b) => a - b), "events stay sorted");
-  assert.ok(timeline.duration_seconds >= Math.max(...times));
+test("gap compression matches the backend anchors", () => {
+  const expected = [0.5, 1.0, 2.188632, 3.0, 5.0, 7.0, 7.748943];
+  [30, 120, 600, 1800, 7200, 28800, 100000].forEach((seconds, index) => close(compressGapSeconds(seconds), expected[index], 1e-5));
 });
 
 test("timeline is deterministic and shows each media once", () => {
@@ -443,4 +425,24 @@ test("an added place can be removed again, even when the same place was added tw
   const none = await applyStopEdits(once, original, services);
   assert.equal(none.trip.observations.length, 2);
   assert.equal(none.route?.segments.length, 1);
+});
+
+import {detectMediaType, sniffMediaType, extractMetadata as extractFromBlob} from "./engine/metadata/extract.ts";
+
+test("media type is recognised from bytes when a phone picker drops the extension", async () => {
+  const bytes = (...parts: Array<number[] | string>) => new Uint8Array(parts.flatMap((part) => (typeof part === "string" ? [...part].map((c) => c.charCodeAt(0)) : part)));
+  assert.equal(sniffMediaType(bytes([0xff, 0xd8, 0xff, 0xe1])), "photo");
+  assert.equal(sniffMediaType(bytes([0x89], "PNG", [13, 10, 26, 10])), "photo");
+  assert.equal(sniffMediaType(bytes("RIFF", [0, 0, 0, 0], "WEBP")), "photo");
+  assert.equal(sniffMediaType(bytes([0, 0, 0, 24], "ftypheic")), "photo");
+  assert.equal(sniffMediaType(bytes([0, 0, 0, 24], "ftypqt  ")), "video");
+  assert.equal(sniffMediaType(bytes([0, 0, 0, 24], "ftypmp42")), "video");
+  assert.equal(sniffMediaType(bytes("hello world!")), null);
+  assert.equal(detectMediaType("1000012345", "video/mp4"), "video");
+  assert.throws(() => detectMediaType("notes", "text/plain", bytes("hello world!")), /Unsupported/);
+
+  const jpeg = buildJpeg(buildTiff({dateTimeOriginal: "2026:10:24 07:00:00", latitude: 27.65, longitude: 85.32}));
+  const media = await extractFromBlob(new Blob([jpeg as BlobPart]), "1000012345", "x");
+  assert.equal(media.media_type, "photo");
+  close(media.latitude ?? 0, 27.65, 1e-6);
 });

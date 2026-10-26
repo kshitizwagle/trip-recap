@@ -22,10 +22,31 @@ export function extension(filename: string): string {
   return dot >= 0 ? filename.slice(dot).toLowerCase() : "";
 }
 
-export function detectMediaType(filename: string): MediaType {
+const HEIF_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1", "avif", "avis"]);
+
+/**
+ * Recognises a file from its first bytes. Phone pickers (Android especially) often hand over
+ * files named like "1000012345" or a UUID with no extension, so the name alone is not enough.
+ */
+export function sniffMediaType(head: Uint8Array): MediaType | null {
+  const ascii = (start: number, end: number) => String.fromCharCode(...head.subarray(start, end));
+  if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "photo";
+  if (head.length >= 8 && head[0] === 0x89 && ascii(1, 4) === "PNG") return "photo";
+  if (head.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "photo";
+  if (head.length >= 12 && ascii(4, 8) === "ftyp") return HEIF_BRANDS.has(ascii(8, 12).toLowerCase()) ? "photo" : "video";
+  if (head.length >= 8 && ["moov", "mdat", "wide", "free"].includes(ascii(4, 8))) return "video";
+  return null;
+}
+
+/** Name first, then the browser's MIME type, then the bytes themselves. */
+export function detectMediaType(filename: string, mimeType = "", head?: Uint8Array): MediaType {
   const suffix = extension(filename);
   if (PHOTO_EXTENSIONS.has(suffix)) return "photo";
   if (VIDEO_EXTENSIONS.has(suffix)) return "video";
+  const sniffed = head ? sniffMediaType(head) : null;
+  if (sniffed) return sniffed;
+  if (/^image\/(jpeg|png|webp|hei[cf])/i.test(mimeType)) return "photo";
+  if (/^video\//i.test(mimeType)) return "video";
   throw new Error(`Unsupported media type: ${filename}`);
 }
 
@@ -78,8 +99,8 @@ function gps(record: ExifRecord): {latitude: number | null; longitude: number | 
   return {latitude, longitude, quality: "valid", warnings: []};
 }
 
-export function normalizeMetadataRecord(record: ExifRecord, filename: string, id?: string): MediaPoint {
-  const mediaType = detectMediaType(filename);
+export function normalizeMetadataRecord(record: ExifRecord, filename: string, id?: string, knownType?: MediaType): MediaPoint {
+  const mediaType = knownType ?? detectMediaType(filename);
   const {capturedAt, source} = timestamp(record, mediaType);
   const location = gps(record);
   const warnings = [...location.warnings];
@@ -110,7 +131,8 @@ export async function readMetadataRecord(source: ByteSource, mediaType: MediaTyp
 
 /** Extracts a MediaPoint from a browser File/Blob. Unreadable metadata yields explicit gaps, not errors. */
 export async function extractMetadata(file: Blob, filename: string, id?: string): Promise<MediaPoint> {
-  const mediaType = detectMediaType(filename);
+  const head = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  const mediaType = detectMediaType(filename, file.type, head);
   let record: ExifRecord = {};
   let readFailed = false;
   try {
@@ -118,7 +140,7 @@ export async function extractMetadata(file: Blob, filename: string, id?: string)
   } catch {
     readFailed = true;
   }
-  const media = normalizeMetadataRecord(record, filename, id);
+  const media = normalizeMetadataRecord(record, filename, id, mediaType);
   if (readFailed) media.metadata_warnings.push("metadata_unreadable");
   return media;
 }

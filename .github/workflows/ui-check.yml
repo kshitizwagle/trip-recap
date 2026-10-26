@@ -16,7 +16,7 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      - run: npm i --no-save playwright@1.47.2
+      - run: npm i --no-save playwright@1.47.2 && npx playwright install --with-deps webkit chromium
       - run: (cd frontend/out && python3 -m http.server 4173 >/dev/null 2>&1 &) && sleep 2 && node --experimental-strip-types .github/ui-check/run.mjs
       - run: ffprobe -v error -count_frames -show_entries stream=codec_name,width,height,nb_read_frames,r_frame_rate:format=duration -of default=nw=1 shots/export.mp4 >> shots/log.txt 2>&1 || true
         if: always()
