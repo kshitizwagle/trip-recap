@@ -26,19 +26,34 @@ Do not add AI, image recognition, automatic music selection, place-name generati
 
 ## Architecture
 
-Keep domain boundaries separate:
+Trip Recap is frontend-only: a static Next.js export with no server. Media is processed in the
+browser and never uploaded. Keep domain boundaries separate under `frontend/src/lib/engine/`:
 
-- `app/models/`: shared Pydantic/domain models
-- `app/metadata/`: EXIF/QuickTime extraction and normalization
-- `app/trip/`: validation, observations, segmentation, trip construction
-- `app/routing/`: routing abstraction, OSRM, caching, geometry
-- `app/timeline/`: deterministic video timeline generation
-- `app/api/`: HTTP endpoints only
-- `app/renderer/`: browser/video rendering concerns
+- `models.ts`: shared domain types (same JSON shapes the old backend produced)
+- `metadata/`: EXIF/QuickTime extraction and normalization
+- `trip.ts`: validation, observations, segmentation, trip construction
+- `routing.ts`: routing abstraction, OSRM, caching, observation progress
+- `timeline.ts`: deterministic video timeline generation
+- `places.ts`: Nominatim place names and search
+- `analyze.ts`: orchestration that turns media into trip payloads
+- `mp4.ts`: MP4 container writing
 
-HTTP handlers should remain thin. Business logic belongs in services/modules, not route functions.
+`frontend/src/lib/trip-api.ts` is the only module the UI calls; it wires the engine to browser
+APIs. `frontend/src/lib/recap-export.ts` owns video rendering. Engine modules stay free of DOM
+and React so they run under `node --test`. Do not add a server, serverless function or required
+API key unless the milestone plan is explicitly changed.
 
-## Python rules
+`backend/` is the earlier FastAPI implementation, kept for reference only. Do not add features
+there; the Python rules below apply only if it is edited.
+
+## TypeScript rules
+
+- Engine modules import each other with explicit `.ts` extensions so Node's type stripping can run the tests.
+- Avoid TypeScript-only runtime syntax (parameter properties, enums, namespaces) in engine modules.
+- Inject `fetch`, clocks and sleeps into network clients so tests stay deterministic.
+- Keep caches of GPS-derived data in memory only.
+
+## Python rules (legacy backend)
 
 - Target Python 3.12+ unless hosting constraints require otherwise.
 - Use type hints on public functions and models.
@@ -51,7 +66,7 @@ HTTP handlers should remain thin. Business logic belongs in services/modules, no
 
 ## Metadata rules
 
-Use ExifTool as the primary metadata reader because the app must support JPEG, HEIC, MOV, and MP4 metadata consistently.
+Read metadata with the built-in parser in `engine/metadata/`, which must support JPEG, HEIC, PNG, WebP, MOV and MP4 consistently. Field names follow ExifTool's so provenance stays comparable.
 
 Timestamp priority:
 
@@ -86,8 +101,8 @@ GPS validation must reject impossible coordinate ranges and flag implausible tra
 - Route pairwise between consecutive observations.
 - Use a `Router` abstraction instead of coupling trip code directly to OSRM.
 - Initial profile is `driving`.
-- Cache route responses using rounded start/end coordinates plus profile.
-- Public OSRM is acceptable for development only.
+- Cache route responses in memory using rounded start/end coordinates plus profile.
+- The browser calls the public OSRM demo by default; keep the base URL configurable for self-hosting.
 - Preserve `inferred=True` on reconstructed route segments.
 
 ## Timeline rules
@@ -100,23 +115,22 @@ Browser preview and video rendering must consume the same timeline model.
 
 ## Rendering rules
 
-MapLibre is the preferred map renderer. FFmpeg is the preferred final composition/encoding tool.
+MapLibre is the map renderer. Export renders frames in the browser, encodes H.264 with WebCodecs and writes the MP4 with `engine/mp4.ts`. Wait for map tiles before capturing each frame.
 
 Target final output:
 
 - 1080x1920
 - 30 FPS
 - H.264 video
-- AAC audio when audio exists
-- MP4 container
+- MP4 container (no audio track)
 
-Do not make final video generation a synchronous HTTP request once rendering becomes non-trivial.
+Export must show progress and be cancellable.
 
 ## Privacy rules
 
 GPS metadata is sensitive.
 
-Default behavior for hosted use should be temporary processing only. Do not persist source media or extracted GPS data beyond what is needed for the requested output unless the user explicitly opts into persistence.
+Media never leaves the device. Do not persist source media or extracted GPS data (including in `localStorage` or IndexedDB) unless the user explicitly opts into persistence. Only coordinates needed for routing and place names may go to those services.
 
 ## Testing rules
 

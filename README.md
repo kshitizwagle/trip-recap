@@ -1,23 +1,48 @@
 # Trip Recap
 
-Turn original photos and videos into a route preview and vertical MP4 using capture
-times and GPS metadata. Missing metadata stays explicit; roads between observations
-are inferred.
+Turn original photos and videos into an animated route map and a vertical MP4, using the
+capture times and GPS metadata already inside them. Missing metadata stays explicit; roads
+between recorded points are inferred and drawn differently.
 
-- `frontend/`: Next.js static export with Astryx, Sonner, and MapLibre, deployed to Cloudflare Pages.
-- `backend/`: FastAPI metadata, routing, timeline, media, and rendering API, deployed on your home server.
-- `compose.yaml`: backend-only deployment, including ExifTool, Chromium, and FFmpeg.
+Everything runs in the browser. The app is a static Next.js export that deploys to
+Cloudflare Pages (or any static host) with no server, database or API key.
 
-See [deployment instructions](docs/deployment.md) for Cloudflare Pages settings,
-API URLs, CORS, Docker, local development, and verification commands.
+- `frontend/`: the app. Next.js static export with Astryx (Aura Dark theme), Sonner and MapLibre.
+- `frontend/src/lib/engine/`: the pipeline as plain TypeScript, ported from the original backend:
+  - `metadata/`: EXIF reader for JPEG, HEIC/HEIF, PNG and WebP, and QuickTime/MP4 dates and GPS
+  - `trip.ts`: speed checks, clustering into observations, trip segmentation
+  - `routing.ts`: router abstraction and the OSRM client (routes are marked `inferred`)
+  - `timeline.ts`: deterministic, compressed video timeline shared by preview and export
+  - `places.ts`: Nominatim place names and search, throttled to one request per second
+  - `mp4.ts`: a small MP4 writer for the H.264 frames WebCodecs produces
+- `frontend/src/lib/recap-export.ts`: renders the 1080 × 1920, 30 FPS MP4 frame by frame in the browser.
+- `backend/`: the previous FastAPI implementation, kept for reference. The app no longer calls it.
 
-Uploads, discard, location autocomplete, route controls, playback, and MP4 export
-use the backend API. No login is required. Source media and derived GPS data are
-temporary by default; see [PRIVACY.md](PRIVACY.md).
+## What leaves the device
 
-Backend limits can be configured using `TRIP_RECAP_MAX_FILES` (100),
-`TRIP_RECAP_MAX_FILE_BYTES` (hard maximum 25 MiB),
-`TRIP_RECAP_DATA_TTL_SECONDS` (3600), `TRIP_RECAP_ROUTE_TIMEOUT_SECONDS` (20),
-`TRIP_RECAP_ROUTE_ATTEMPTS` (3), `TRIP_RECAP_MIN_ROUTE_POINT_DISTANCE_METERS` (50),
-`TRIP_RECAP_RENDER_MAX_SECONDS` (90), and `TRIP_RECAP_RENDER_FPS` (30).
-`TRIP_RECAP_DATA_DIR` defaults to `/tmp/trip-recap`; `CHROMIUM_PATH` can select a browser.
+Media files are never uploaded. The browser sends coordinates only to the public
+[OSRM](https://project-osrm.org/) demo router (to infer roads), to
+[Nominatim](https://nominatim.org/) (for place names and endpoint search) and requests
+map tiles from [OpenFreeMap](https://openfreemap.org/) and EOX. See [PRIVACY.md](PRIVACY.md).
+
+The public OSRM and Nominatim services are fine for personal use. For heavier traffic, point
+`OSRMRouter` and `NominatimGeocoder` (in `frontend/src/lib/engine/`) at your own instances.
+
+## Develop
+
+```sh
+cd frontend
+npm ci --ignore-scripts
+npm run dev        # http://localhost:3000
+npm test           # engine + client tests, no network needed
+npm run typecheck
+npm run build      # static site in frontend/out
+```
+
+See [deployment instructions](docs/deployment.md) for Cloudflare Pages.
+
+## Browser support
+
+Metadata reading, routing and preview work in any current browser. MP4 export needs
+WebCodecs H.264 encoding: recent Chrome, Edge and Safari. HEIC previews show in Safari;
+other browsers still read HEIC metadata but show a placeholder instead of the image.

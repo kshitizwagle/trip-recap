@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  pytest:
+  legacy-backend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,4 +36,4 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - run: test -f out/recap.html && test -f out/icon.svg
+      - run: test -f out/index.html && test -f out/recap.html && test -f out/icon.svg
