@@ -27,28 +27,15 @@ function first(address: Address, keys: string[]): string | null {
   return null;
 }
 
-const ADMIN_SUFFIX = /\s+(rural municipality|sub-metropolitan city|metropolitan city|municipality|gaunpalika|nagarpalika|village development committee|vdc)$/i;
-
-/**
- * Tidies administrative names that read badly on a map, common in Nepal's OSM data:
- * ward suffixes ("Indrasarowar-04", "Ward No. 5") and unit words ("… Rural Municipality").
- */
-export function cleanPlaceName(value: string | null): string | null {
-  if (!value) return null;
-  let name = value.split(",", 1)[0].trim();
-  name = name.replace(/(\s*-\s*\d{1,2}|\s+ward\s*(no\.?)?\s*\d{1,2})$/i, "").trim();
-  name = name.replace(ADMIN_SUFFIX, "").trim();
-  return name || null;
-}
-
 function beforeComma(value: string | null): string | null {
-  return cleanPlaceName(value);
+  if (!value) return null;
+  return value.split(",", 1)[0].trim() || null;
 }
 
 export function formatPlaceName(payload: NominatimPayload, granularity: PlaceGranularity = "neighborhood"): string | null {
   const address = payload.address ?? {};
   const city = first(address, ["city", "town", "village", "municipality"]);
-  const neighborhood = first(address, ["neighbourhood", "hamlet", "quarter", "suburb", "village", "town"]);
+  const neighborhood = first(address, ["neighbourhood", "quarter", "suburb", "hamlet", "village"]);
   const district = first(address, ["state_district", "county", "district"]);
   const region = first(address, ["state", "region"]);
 
@@ -131,17 +118,8 @@ export class NominatimGeocoder {
     return `${latitude.toFixed(5)}_${longitude.toFixed(5)}`;
   }
 
-  /**
-   * Nominatim's zoom picks what the lookup snaps to. 18 returns the nearest road or business,
-   * which reads badly as a stop name; 14 returns the neighbourhood, hamlet or village, which is
-   * what people call a place (and matches Nepal's OSM data far better). Specific names use 18.
-   */
-  static zoomFor(granularity: PlaceGranularity): number {
-    return granularity === "specific" ? 18 : granularity === "neighborhood" ? 14 : 10;
-  }
-
-  payload(latitude: number, longitude: number, zoom = 18): Promise<NominatimPayload> {
-    const key = `${NominatimGeocoder.cacheKey(latitude, longitude)}_z${zoom}`;
+  payload(latitude: number, longitude: number): Promise<NominatimPayload> {
+    const key = NominatimGeocoder.cacheKey(latitude, longitude);
     let cached = this.reverseCache.get(key);
     if (!cached) {
       const params = new URLSearchParams({
@@ -149,7 +127,7 @@ export class NominatimGeocoder {
         lon: String(longitude),
         format: "jsonv2",
         addressdetails: "1",
-        zoom: String(zoom),
+        zoom: "18",
         "accept-language": "en",
       });
       cached = this.throttled(() => this.getJson(`${this.baseUrl}/reverse?${params}`)) as Promise<NominatimPayload>;
@@ -160,7 +138,7 @@ export class NominatimGeocoder {
   }
 
   async reverse(latitude: number, longitude: number, granularity: PlaceGranularity = "neighborhood"): Promise<string | null> {
-    return formatPlaceName(await this.payload(latitude, longitude, NominatimGeocoder.zoomFor(granularity)), granularity);
+    return formatPlaceName(await this.payload(latitude, longitude), granularity);
   }
 
   search(query: string, limit = 5, signal?: AbortSignal): Promise<LocationSuggestion[]> {
