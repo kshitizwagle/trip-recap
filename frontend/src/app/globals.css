@@ -159,7 +159,7 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
 .stage-holder .map-frame { display: flex; flex-direction: column; gap: 14px; }
 .map-canvas-frame {
   position: relative; align-self: center; overflow: hidden; container-type: size;
-  width: min(100%, calc(80vh * var(--frame-ratio, 0.5625)));
+  width: min(100%, calc(max(320px, 100dvh - 250px) * var(--frame-ratio, 0.5625)));
   aspect-ratio: var(--frame-ratio, 0.5625);
   border-radius: 8px; background: var(--aura-bg-deep);
   box-shadow: 0 0 0 1px var(--aura-border), 0 20px 60px rgba(0, 0, 0, 0.45);
