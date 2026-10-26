@@ -10,7 +10,8 @@ import {
   type Ref,
 } from "react";
 import type {TripData, TripMedia} from "@/lib/trip-types";
-import type {TimelineEvent} from "@/lib/trip-types";
+import {visibleMediaAt} from "@/lib/engine/timeline.ts";
+import type {Timeline} from "@/lib/engine/models.ts";
 
 type Coordinate = [number, number];
 
@@ -30,13 +31,6 @@ export interface MapPreviewProps {
   vehicle: string;
   playbackSpeed: number;
   slowPoints: boolean;
-}
-
-declare global {
-  interface Window {
-    setTripTime?: (seconds: number) => Promise<void>;
-    tripReady?: boolean;
-  }
 }
 
 function satelliteStyle(): maplibregl.StyleSpecification {
@@ -112,11 +106,6 @@ const MapPreview = forwardRef(function MapPreview(
   const totalDistanceRef = useRef(0);
   const boundsRef = useRef<maplibregl.LngLatBounds | null>(null);
   const [overlayMedia, setOverlayMedia] = useState<TripMedia | null>(null);
-  const [renderMode, setRenderMode] = useState(false);
-
-  useEffect(() => {
-    setRenderMode(new URLSearchParams(window.location.search).get("render") === "1");
-  }, []);
 
   const setRouteProgress = (progress: number) => {
     const map = mapRef.current;
@@ -235,21 +224,8 @@ const MapPreview = forwardRef(function MapPreview(
     const duration = Math.max(data.timeline.duration_seconds, 0.001);
     const time = Math.max(0, Math.min(duration, seconds));
     setRouteProgress(time / duration);
-    let visibleEvent: TimelineEvent | null = null;
-    for (const event of data.timeline.events) {
-      if (event.video_time > time) break;
-      if (event.type === "media_show") visibleEvent = event;
-      if (event.type === "media_hide" && visibleEvent?.payload.media_id === event.payload.media_id) {
-        visibleEvent = null;
-      }
-    }
-    if (!visibleEvent) {
-      setOverlayMedia(null);
-      return;
-    }
-    const mediaId = visibleEvent.payload.media_id;
-    if (typeof mediaId !== "string") return;
-    setOverlayMedia(data.trip.media.find((media) => media.id === mediaId) ?? null);
+    const visible = visibleMediaAt(data.timeline as Timeline, time);
+    setOverlayMedia(visible ? data.trip.media.find((media) => media.id === visible.mediaId) ?? null : null);
   };
 
   useImperativeHandle(ref, () => ({replayRoute, fitRoute, setTripTime}), [data, playbackSpeed, slowPoints]);
@@ -264,7 +240,6 @@ const MapPreview = forwardRef(function MapPreview(
     mapRef.current = null;
     markerRef.current = null;
     glyphRef.current = null;
-    window.tripReady = false;
 
     const coordinates = routeCoordinates(data);
     coordinatesRef.current = coordinates;
@@ -292,7 +267,7 @@ const MapPreview = forwardRef(function MapPreview(
       pitchWithRotate: false,
     });
     mapRef.current = map;
-    if (!renderMode) map.addControl(new maplibregl.NavigationControl({showCompass: false, visualizePitch: false}), "top-right");
+    map.addControl(new maplibregl.NavigationControl({showCompass: false, visualizePitch: false}), "top-right");
 
     map.on("load", () => {
       if (mapStyle === "Hybrid") {
@@ -314,7 +289,7 @@ const MapPreview = forwardRef(function MapPreview(
         geometry: {type: "LineString" as const, coordinates},
       };
       map.addSource("route", {type: "geojson", data: routeFeature});
-      map.addLayer({id: "route", type: "line", source: "route", paint: {"line-color": "#8464c6", "line-width": 5, "line-opacity": 0.7}});
+      map.addLayer({id: "route", type: "line", source: "route", paint: {"line-color": "#8464c6", "line-width": 5, "line-opacity": 0.7, "line-dasharray": [2, 1.4]}});
       map.addSource("traveled", {
         type: "geojson",
         data: {type: "Feature", properties: {}, geometry: {type: "LineString", coordinates: []}},
@@ -341,7 +316,7 @@ const MapPreview = forwardRef(function MapPreview(
         markerElement.className = "vehicle-marker";
         const glyph = document.createElement("span");
         glyph.className = "vehicle-glyph";
-        glyph.textContent = renderMode ? "🛵" : vehicle;
+        glyph.textContent = vehicle;
         markerElement.appendChild(glyph);
         glyphRef.current = glyph;
         markerRef.current = new maplibregl.Marker({
@@ -367,11 +342,7 @@ const MapPreview = forwardRef(function MapPreview(
         map.setMinZoom(11);
       }
 
-      if (renderMode) {
-        window.tripReady = true;
-      } else {
-        replayRoute();
-      }
+      replayRoute();
     });
 
     return () => {
@@ -380,17 +351,8 @@ const MapPreview = forwardRef(function MapPreview(
       markersRef.current = [];
       map.remove();
       mapRef.current = null;
-      window.tripReady = false;
     };
-  }, [data, mapStyle, renderMode, vehicle]);
-
-  useEffect(() => {
-    const previous = window.setTripTime;
-    window.setTripTime = setTripTime;
-    return () => {
-      if (window.setTripTime === setTripTime) window.setTripTime = previous;
-    };
-  }, [setTripTime]);
+  }, [data, mapStyle, vehicle]);
 
   return (
     <section className="map-frame" aria-label="Trip route map">
@@ -400,7 +362,7 @@ const MapPreview = forwardRef(function MapPreview(
           overlayMedia.media_type === "video" ? (
             <video src={overlayMedia.url} muted playsInline autoPlay controls aria-label={overlayMedia.filename} />
           ) : (
-            <img src={overlayMedia.preview_url} alt={overlayMedia.filename} />
+            <img src={overlayMedia.preview_url} alt={overlayMedia.filename} onError={() => setOverlayMedia(null)} />
           )
         ) : null}
       </div>

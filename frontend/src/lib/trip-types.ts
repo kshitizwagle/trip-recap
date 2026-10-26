@@ -3,8 +3,12 @@ export interface UploadedMedia {
   filename: string;
   state: "uploaded";
   size_bytes: number;
+  /** Always 0: media stays on this device. */
   stored_bytes: number;
   preview_url: string;
+  captured_at: string | null;
+  has_gps: boolean;
+  metadata_warnings: string[];
 }
 
 export interface RouteGeometry {
@@ -37,6 +41,12 @@ export interface TripMedia {
   media_type: string;
   url: string;
   preview_url: string;
+  captured_at?: string | null;
+  timestamp_source?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gps_quality?: string;
+  metadata_warnings?: string[];
 }
 
 export interface TripDocument {
@@ -91,10 +101,4 @@ export interface AnalyzeSessionPayload {
 
 export interface AnalyzeSessionResponse {
   trips: TripData[];
-}
-
-export interface RenderJob {
-  id: string;
-  status: string;
-  error?: string;
 }

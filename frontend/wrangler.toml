@@ -1,5 +1,7 @@
+name = "trip-recap"
 compatibility_date = "2026-09-18"
+# Static export only: Pages serves frontend/out. No API URL or server is needed.
+pages_build_output_dir = "./out"
 
 [vars]
-NEXT_PUBLIC_API_BASE_URL = "https://trip-recap.kshitizwagle.com.np"
 NODE_VERSION = "22"

@@ -1,19 +1,21 @@
 # Privacy
 
-Trip Recap processes media metadata that may contain precise GPS coordinates and capture times.
+Trip Recap reads media metadata that may contain precise GPS coordinates and capture times.
 
 ## Default behavior
 
-- Uploaded files are stored only in temporary application storage.
-- Extracted GPS coordinates and derived route data are stored only for the active trip lifetime.
-- Trip media, route data, render artifacts, and route-cache entries are subject to the configured TTL. The default TTL is one hour.
-- Old temporary data is removed opportunistically when new analysis requests arrive.
-- The application does not require accounts or intentionally build a persistent location history.
+- Photos and videos are read in the browser and are never uploaded. Previews use temporary
+  object URLs that disappear when the tab closes.
+- Extracted metadata, routes, place names and exported videos live only in the tab's memory.
+  Nothing is written to `localStorage`, cookies or a server.
+- To infer roads, the browser sends the coordinates of consecutive points to the public OSRM
+  router. To label places and look up typed endpoints, it sends coordinates and search text to
+  Nominatim. Map tiles come from OpenFreeMap and EOX. These services see your IP address and
+  those requests, under their own policies.
+- There are no accounts, analytics or location history.
 
-## Hosting note
+## Self-hosting
 
-Temporary storage is local to the running application instance. Hosted platforms may restart or replace that instance at any time. Do not treat the current storage layer as durable storage.
-
-## Configuration
-
-`TRIP_RECAP_DATA_TTL_SECONDS` controls the default retention window. Production deployments should use the shortest practical TTL and should add infrastructure-level lifecycle rules if persistent object storage is introduced later.
+To keep coordinates away from third-party services, run your own OSRM and Nominatim and point
+the `baseUrl` options in `frontend/src/lib/engine/routing.ts` and `frontend/src/lib/engine/places.ts`
+at them.
