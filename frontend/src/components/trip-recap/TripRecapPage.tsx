@@ -551,7 +551,7 @@ export default function TripRecapPage() {
               />
             </div>
             {isIOS && (
-              <div className="gps-note ios-tip" role="note">
+              <div className="ios-tip" role="note">
                 <strong>On iPhone, before tapping Add</strong>
                 <span>In the photo picker, tap <b>Options</b> at the top and set:</span>
                 <ul>
