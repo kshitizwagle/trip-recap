@@ -98,6 +98,7 @@ export default function TripRecapPage() {
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [video, setVideo] = useState<{url: string; blob: Blob} | null>(null);
   const [exportSupported, setExportSupported] = useState(true);
+  const [isIOS, setIsIOS] = useState(false);
   const [status, setStatus] = useState("");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -108,6 +109,7 @@ export default function TripRecapPage() {
   useEffect(() => {
     setSessionId(randomId());
     setExportSupported(canExportVideo());
+    setIsIOS(/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
   }, []);
 
   useEffect(() => {
@@ -420,7 +422,7 @@ export default function TripRecapPage() {
       <strong>{missingGps === retainedRecords.length ? "None of these files have a location." : `${missingGps} of ${retainedRecords.length} files have no location.`}</strong>
       <span>Phones often remove location when you pick from the photo gallery.</span>
       <ul>
-        <li><b>iPhone:</b> in the photo picker, tap <b>Options</b> at the top and turn on <b>Location</b>, then select the photos again.</li>
+        <li><b>iPhone:</b> in the photo picker, tap <b>Options</b> at the top, turn on <b>Location</b> and set <b>Format</b> to <b>Current</b>, then select the photos again.</li>
         <li><b>Android:</b> pick the files through <b>Browse</b> / the Files app, or from Google Drive, instead of the Photos picker.</li>
       </ul>
       <span>{missingGps === retainedRecords.length ? "You can still build a route by setting a start and end point below." : "Files without a location are left off the map."}</span>
@@ -548,6 +550,17 @@ export default function TripRecapPage() {
                 description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
               />
             </div>
+            {isIOS && (
+              <div className="gps-note ios-tip" role="note">
+                <strong>On iPhone, before tapping Add</strong>
+                <span>In the photo picker, tap <b>Options</b> at the top and set:</span>
+                <ul>
+                  <li><b>Location</b> on, so the route can be drawn.</li>
+                  <li><b>Format: Current</b>, so iPhone hands over the originals. On Automatic it converts every photo and video first, which can take minutes with no sign of progress after you tap Add.</li>
+                </ul>
+                <span>Photos stored in iCloud also need to download before they appear.</span>
+              </div>
+            )}
             {records.length > 0 && (
               <div className="empty-setup">
                 <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
