@@ -1,0 +1,15 @@
+0 failure(s)
+PASS iphone: iPhone picker tip shown
+PASS iphone: Add media opens the picker :: multiple=true
+PASS iphone: extension-less files are read :: IMG 1000012340 1.1 KB · Oct 24, 01:15 AM GPS time ×  | IMG 1000012341 1.1 KB · Oct 24, 02:25 AM GPS time ×  | IMG 1000012342 1.1 KB · Oct 24, 03:15 AM GPS time × 
+PASS iphone: route builds :: 3 stops · 31.6 km · 2.0 h · 3/3 geotagged
+PASS iphone: missing-location note :: None of these files have a location. Phones often remove location when you pick from the photo gallery. iPhone: in the p
+PASS iphone: no-GPS photos + start/end build a route :: 2 stops · 72.8 km · 2.0 h · 0/3 geotagged
+PASS iphone: no horizontal scroll
+PASS pixel: iPhone picker tip hidden
+PASS pixel: Add media opens the picker :: multiple=true
+PASS pixel: extension-less files are read :: IMG 1000012340 1.1 KB · Oct 24, 01:15 AM GPS time × | IMG 1000012341 1.1 KB · Oct 24, 02:25 AM GPS time × | IMG 1000012342 1.1 KB · Oct 24, 03:15 AM GPS time ×
+PASS pixel: route builds :: 3 stops · 31.6 km · 2.0 h · 3/3 geotagged
+PASS pixel: missing-location note :: None of these files have a location. Phones often remove location when you pick from the photo gallery. iPhone: in the p
+PASS pixel: no-GPS photos + start/end build a route :: 2 stops · 72.8 km · 2.0 h · 0/3 geotagged
+PASS pixel: no horizontal scroll/home/runner/work/_temp/a3acfcbc-62e3-4d88-adf5-8edaad6be4cd.sh: line 1: ffprobe: command not found
