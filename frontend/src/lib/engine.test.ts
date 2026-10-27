@@ -7,7 +7,7 @@ import {parseIso6709} from "./engine/metadata/quicktime.ts";
 import {buildHeic, buildJpeg, buildMp4, buildTiff} from "./engine/test-fixtures.ts";
 import type {MediaPoint} from "./engine/models.ts";
 import {TripBuilder} from "./engine/trip.ts";
-import {compressGapSeconds, TimelineBuilder, visibleMediaAt} from "./engine/timeline.ts";
+import {compressGapSeconds, moveSeconds, TimelineBuilder, visibleMediaAt} from "./engine/timeline.ts";
 import {buildRoute, OSRMRouter, RouteCache, routeProgresses} from "./engine/routing.ts";
 import {formatPlaceName, NominatimGeocoder} from "./engine/places.ts";
 import {analyzeMedia, applyRouteEndpoints, parseCoordinates, tripPayload} from "./engine/analyze.ts";
@@ -207,9 +207,27 @@ test("timestamp-only media joins the trip without a location", () => {
   assert.equal(trip.stats.gps_media_count, 1);
 });
 
-test("gap compression matches the backend anchors", () => {
-  const expected = [0.5, 1.0, 2.188632, 3.0, 5.0, 7.0, 7.748943];
-  [30, 120, 600, 1800, 7200, 28800, 100000].forEach((seconds, index) => close(compressGapSeconds(seconds), expected[index], 1e-5));
+test("gap compression grows with travel time and long legs get a distance floor", () => {
+  const values = [30, 120, 600, 1800, 7200, 28800, 100000].map(compressGapSeconds);
+  close(values[1], 1.5, 1e-9);
+  close(values[3], 4, 1e-9);
+  close(values[5], 9, 1e-9);
+  assert.ok(values.every((value, i) => i === 0 || value >= values[i - 1]), "monotonic");
+  assert.ok(values[6] <= 12);
+  assert.ok(moveSeconds(3600, 250_000) >= 10, "a 250 km leg takes at least 10 s");
+  assert.ok(moveSeconds(60, 500) < 2, "a short hop stays short");
+  assert.ok(moveSeconds(1e9, 1e9) <= 14, "capped");
+});
+
+test("the traveller sets off within a second, even with photos at the first stop", () => {
+  const [trip] = new TripBuilder().build([point("m1", 0, 40.75, -74.0), point("m1b", 1, 40.75, -74.0), point("m2", 60, 40.9, -73.8)]);
+  const timeline = new TimelineBuilder().build(trip);
+  const firstMove = timeline.events.find((event) => event.type === "move");
+  assert.ok(firstMove && firstMove.video_time < 1, `first move at ${firstMove?.video_time}`);
+  assert.equal(visibleMediaAt(timeline, 1.2)?.mediaId, "m1");
+  const times = timeline.events.map((event) => event.video_time);
+  assert.deepEqual(times, [...times].sort((a, b) => a - b), "events stay sorted");
+  assert.ok(timeline.duration_seconds >= Math.max(...times));
 });
 
 test("timeline is deterministic and shows each media once", () => {

@@ -37,6 +37,9 @@ for (const [label, engine, device] of [["iphone", webkit, devices["iPhone 13"]],
   try {
     await page.goto("http://127.0.0.1:4173/", {waitUntil: "networkidle"});
     await page.waitForTimeout(800);
+    const tip = await page.locator(".ios-tip").count();
+    check(`${label}: iPhone picker tip ${label === "iphone" ? "shown" : "hidden"}`, label === "iphone" ? tip === 1 : tip === 0);
+    await page.screenshot({path: `shots/${label}-0-empty.png`, fullPage: true});
     // Tap the header button the way a thumb would; it must open a file chooser.
     const [chooser] = await Promise.all([page.waitForEvent("filechooser", {timeout: 10000}), page.getByText("Add media", {exact: true}).tap()]);
     check(`${label}: Add media opens the picker`, chooser.isMultiple(), `multiple=${chooser.isMultiple()}`);

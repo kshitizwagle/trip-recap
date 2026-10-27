@@ -205,3 +205,4 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
 .gps-note strong { color: var(--aura-warning); font-weight: 600; }
 .gps-note ul { margin: 0; padding-left: 18px; }
 .gps-note b { color: var(--aura-fg); font-weight: 600; }
+.ios-tip { width: min(100%, 34rem); }

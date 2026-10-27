@@ -21,7 +21,7 @@ import {
   uploadMedia,
   type UploadRequest,
 } from "@/lib/trip-api";
-import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
+import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_MAX_SECONDS, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
 import {
   MAX_CONCURRENT_UPLOADS,
   MAX_FILE_LABEL,
@@ -98,6 +98,7 @@ export default function TripRecapPage() {
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [video, setVideo] = useState<{url: string; blob: Blob} | null>(null);
   const [exportSupported, setExportSupported] = useState(true);
+  const [isIOS, setIsIOS] = useState(false);
   const [status, setStatus] = useState("");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -108,6 +109,7 @@ export default function TripRecapPage() {
   useEffect(() => {
     setSessionId(randomId());
     setExportSupported(canExportVideo());
+    setIsIOS(/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
   }, []);
 
   useEffect(() => {
@@ -379,7 +381,7 @@ export default function TripRecapPage() {
     setStatus("Rendering your recap in this browser…");
     setStatusTone("neutral");
     try {
-      const blob = await exportRecapVideo(trip, {vehicle, styleId, frame, quality, fps, signal: controller.signal, onProgress: setExportProgress});
+      const blob = await exportRecapVideo(trip, {vehicle, styleId, frame, quality, fps, speed: playbackSpeed, signal: controller.signal, onProgress: setExportProgress});
       setVideo({url: URL.createObjectURL(blob), blob});
       setStatus("MP4 ready to download.");
       setStatusTone("success");
@@ -394,7 +396,7 @@ export default function TripRecapPage() {
       exportAbortRef.current = null;
       setExportProgress(null);
     }
-  }, [analyzing, exporting, fps, frame, quality, styleId, trip, vehicle]);
+  }, [analyzing, exporting, fps, frame, playbackSpeed, quality, styleId, trip, vehicle]);
 
   const jsonValues = useMemo<Record<JsonTab, unknown>>(
     () => ({trip: trip?.trip ?? null, route: trip?.route ?? null, timeline: trip?.timeline ?? null}),
@@ -420,7 +422,7 @@ export default function TripRecapPage() {
       <strong>{missingGps === retainedRecords.length ? "None of these files have a location." : `${missingGps} of ${retainedRecords.length} files have no location.`}</strong>
       <span>Phones often remove location when you pick from the photo gallery.</span>
       <ul>
-        <li><b>iPhone:</b> in the photo picker, tap <b>Options</b> at the top and turn on <b>Location</b>, then select the photos again.</li>
+        <li><b>iPhone:</b> in the photo picker, tap <b>Options</b> at the top, turn on <b>Location</b> and set <b>Format</b> to <b>Current</b>, then select the photos again.</li>
         <li><b>Android:</b> pick the files through <b>Browse</b> / the Files app, or from Google Drive, instead of the Photos picker.</li>
       </ul>
       <span>{missingGps === retainedRecords.length ? "You can still build a route by setting a start and end point below." : "Files without a location are left off the map."}</span>
@@ -444,6 +446,7 @@ export default function TripRecapPage() {
     </div>
   );
 
+  const exportLength = Math.round(Math.min((trip?.timeline?.duration_seconds ?? 0) / playbackSpeed, EXPORT_MAX_SECONDS));
   const exportText = exporting
     ? exportProgress?.stage === "preparing"
       ? "Loading map and media…"
@@ -452,7 +455,7 @@ export default function TripRecapPage() {
         : `Rendering ${exportPercent}%`
     : video
       ? `Ready · ${(video.blob.size / 1_048_576).toFixed(1)} MB`
-      : `${exportDimensions(frame, quality).join("×")} · H.264 MP4`;
+      : `${exportDimensions(frame, quality).join("×")} · ${exportLength} s at ${playbackSpeed === 0.5 ? "½" : playbackSpeed}× · MP4`;
 
   return (
     <Theme theme={tripRecapTheme} mode="dark">
@@ -547,6 +550,17 @@ export default function TripRecapPage() {
                 description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
               />
             </div>
+            {isIOS && (
+              <div className="gps-note ios-tip" role="note">
+                <strong>On iPhone, before tapping Add</strong>
+                <span>In the photo picker, tap <b>Options</b> at the top and set:</span>
+                <ul>
+                  <li><b>Location</b> on, so the route can be drawn.</li>
+                  <li><b>Format: Current</b>, so iPhone hands over the originals. On Automatic it converts every photo and video first, which can take minutes with no sign of progress after you tap Add.</li>
+                </ul>
+                <span>Photos stored in iCloud also need to download before they appear.</span>
+              </div>
+            )}
             {records.length > 0 && (
               <div className="empty-setup">
                 <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
