@@ -577,52 +577,54 @@ export default function TripRecapPage() {
             <div className="empty-copy">
               <h2>Make a trip out of the camera roll.</h2>
               <p>Drop the photos and videos from a trip. Their GPS and capture times draw the route, then it plays as a map you can export.</p>
+              <p className="note">Everything runs in this browser. Files never leave your device; only point coordinates go to the road router (OSRM) and place names (OpenStreetMap).</p>
             </div>
-            <div className="empty-drop">
-              <FileInput
-                className="editor-upload-input"
-                isDisabled={busy}
-                label="Trip photos and videos"
-                isLabelHidden
-                value={null}
-                onChange={handleFiles}
-                accept={ACCEPTED_MEDIA}
-                isMultiple
-                mode="dropzone"
-                placeholder="Drop photos and videos, or choose files"
-                description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
-              />
-            </div>
-            {isIOS && (
-              <div className="ios-tip" role="note">
-                <strong>On iPhone, before tapping Add</strong>
-                <span>In the photo picker, tap <b>Options</b> at the top and set:</span>
-                <ul>
-                  <li><b>Location</b> on, so the route can be drawn.</li>
-                  <li><b>Format: Current</b>, so iPhone hands over the originals. On Automatic it converts every photo and video first, which can take minutes with no sign of progress after you tap Add.</li>
-                </ul>
-                <span>Photos stored in iCloud also need to download before they appear.</span>
+            <div className="empty-paths">
+              <div className="empty-drop">
+                <FileInput
+                  className="editor-upload-input"
+                  isDisabled={busy}
+                  label="Trip photos and videos"
+                  isLabelHidden
+                  value={null}
+                  onChange={handleFiles}
+                  accept={ACCEPTED_MEDIA}
+                  isMultiple
+                  mode="dropzone"
+                  placeholder="Drop photos and videos, or choose files"
+                  description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
+                />
               </div>
-            )}
-            {records.length > 0 && (
-              <div className="empty-setup">
-                <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
-                {gpsNote}
-                {routeOptions}
-                <div className="controls">
-                  {buildButton}
-                  {status && <span id="status" className={`exp-status status-${statusTone}`} aria-live="polite">{status}</span>}
+              {isIOS && (
+                <div className="ios-tip" role="note">
+                  <strong>On iPhone, before tapping Add</strong>
+                  <span>In the photo picker, tap <b>Options</b> at the top and set:</span>
+                  <ul>
+                    <li><b>Location</b> on, so the route can be drawn.</li>
+                    <li><b>Format: Current</b>, so iPhone hands over the originals. On Automatic it converts every photo and video first, which can take minutes with no sign of progress after you tap Add.</li>
+                  </ul>
+                  <span>Photos stored in iCloud also need to download before they appear.</span>
                 </div>
-              </div>
-            )}
-            {records.length === 0 && (
-              <div className="empty-setup">
-                <p className="empty-divider" aria-hidden="true">or</p>
-                <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} />
-                {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
-              </div>
-            )}
-            <p className="note">Everything runs in this browser. Files never leave your device; only point coordinates go to the road router (OSRM) and place names (OpenStreetMap).</p>
+              )}
+              {records.length > 0 && (
+                <div className="empty-setup">
+                  <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                  {gpsNote}
+                  {routeOptions}
+                  <div className="controls">
+                    {buildButton}
+                    {status && <span id="status" className={`exp-status status-${statusTone}`} aria-live="polite">{status}</span>}
+                  </div>
+                </div>
+              )}
+              {records.length === 0 && (
+                <div className="empty-setup">
+                  <p className="empty-divider" aria-hidden="true">or</p>
+                  <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} />
+                  {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
+                </div>
+              )}
+            </div>
           </section>
         )}
         <Toaster position="bottom-right" theme="dark" richColors closeButton />

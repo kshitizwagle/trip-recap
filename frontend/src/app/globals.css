@@ -224,10 +224,25 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
 .empty-copy { max-width: 36rem; text-align: center; }
 .empty-copy h2 { margin: 0 0 10px; font: 700 clamp(1.9rem, 4vw, 3.1rem)/1.05 var(--aura-serif); letter-spacing: -0.01em; text-wrap: balance; }
 .empty-copy p { margin: 0; color: var(--aura-muted); font-size: 14px; }
-.empty-drop { width: min(100%, 34rem); }
+.empty-copy .note { margin-top: 18px; color: var(--aura-metadata); font-size: 12.5px; }
+.empty-paths { display: flex; flex-direction: column; align-items: center; gap: 22px; width: min(100%, 44rem); }
+.empty-drop { width: 100%; }
 .empty-drop .editor-upload-input { min-height: 150px !important; border-radius: 8px !important; }
-.empty-setup { display: flex; flex-direction: column; gap: 18px; width: min(100%, 44rem); }
-.empty-stage > .note { text-align: center; }
+.empty-setup { display: flex; flex-direction: column; gap: 18px; width: 100%; }
+
+/* Wide screens: the pitch on the left, the two ways in (photos or places) on the right. */
+@media (min-width: 960px) {
+  .empty-stage {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center;
+    gap: clamp(40px, 5vw, 96px); min-height: calc(100dvh - 110px);
+    padding: clamp(40px, 5vw, 80px) clamp(40px, 5vw, 96px);
+  }
+  .empty-copy { max-width: 42rem; text-align: left; }
+  .empty-copy h2 { margin-bottom: 18px; font-size: clamp(2.8rem, 4.8vw, 5.6rem); }
+  .empty-copy > p:not(.note) { max-width: 30rem; font-size: 15px; line-height: 1.6; }
+  .empty-paths { width: 100%; max-width: none; }
+  .empty-drop .editor-upload-input { min-height: 180px !important; }
+}
 .empty-divider {
   display: flex; align-items: center; gap: 14px; margin: 0;
   color: var(--aura-metadata); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase;
@@ -241,6 +256,12 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
   .media-overlay { right: 12px; bottom: 12px; left: 12px; max-width: none; }
   .controls { gap: 10px; }
   .scrub { flex-basis: 100%; order: -1; }
+}
+
+/* Fingers need bigger targets than the compact desktop icons and pills. */
+@media (pointer: coarse), (max-width: 640px) {
+  .editor-stop-actions button { min-width: 44px; min-height: 44px; }
+  .seg button { padding-block: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
