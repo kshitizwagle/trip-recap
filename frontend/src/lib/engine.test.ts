@@ -464,3 +464,29 @@ test("media type is recognised from bytes when a phone picker drops the extensio
   assert.equal(media.media_type, "photo");
   close(media.latitude ?? 0, 27.65, 1e-6);
 });
+
+import {analyzePlaces} from "./engine/analyze.ts";
+
+test("a trip can be built from places alone, with nothing marked as observed", async () => {
+  const services = {
+    router: {route: async (start: {latitude: number; longitude: number}, end: {latitude: number; longitude: number}, s: string, e: string) => ({
+      start_observation_id: s, end_observation_id: e, geometry: [start, end], distance_meters: 20000, duration_seconds: 1500, routing_profile: "driving", inferred: true as const,
+    })},
+    now: () => new Date("2026-10-28T00:00:00Z"),
+  };
+  const analyzed = await analyzePlaces([
+    {kind: "custom", latitude: 27.7172, longitude: 85.324, name: "Kathmandu", id: "ktm"},
+    {kind: "custom", latitude: 27.656, longitude: 85.087, name: "Thaha", id: "thaha"},
+    {kind: "custom", latitude: 27.4293, longitude: 85.0302, name: "Hetauda", id: "hetauda"},
+  ], services);
+  assert.deepEqual(analyzed.trip.observations.map((item) => item.id), ["ktm", "thaha", "hetauda"]);
+  assert.ok(analyzed.trip.observations.every((item) => item.media_ids.length === 0), "no stop claims media");
+  assert.equal(analyzed.trip.started_at, null, "no capture time is invented for the trip");
+  assert.equal(analyzed.trip.stats.gps_media_count, 0);
+  assert.equal(analyzed.route?.segments.length, 2);
+  assert.ok(analyzed.route?.segments.every((segment) => segment.inferred));
+  const moves = analyzed.timeline.events.filter((event) => event.type === "move");
+  assert.equal(moves.length, 2);
+  assert.ok(moves.every((event) => Number(event.payload.duration_seconds) >= 0.5), "legs are paced by distance");
+  await assert.rejects(analyzePlaces([], services), /at least one place/);
+});

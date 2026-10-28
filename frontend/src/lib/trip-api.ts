@@ -2,7 +2,7 @@
 // leave the device: metadata is read locally, OSRM and Nominatim are called directly, and media URLs
 // are object URLs that live only as long as the tab.
 
-import {analyzeMedia, applyStopEdits, type AnalyzedTrip, resolveLocation, type StopEdit, tripPayload} from "./engine/analyze.ts";
+import {analyzeMedia, analyzePlaces, applyStopEdits, type AnalyzedTrip, resolveLocation, type StopEdit, tripPayload} from "./engine/analyze.ts";
 import {randomId} from "./engine/ids.ts";
 import {extractMetadata} from "./engine/metadata/extract.ts";
 import type {MediaPoint} from "./engine/models.ts";
@@ -216,6 +216,29 @@ function shortName(displayName: string): string {
   return displayName.split(",")[0]?.trim() || displayName.trim();
 }
 
+type CustomStop = Extract<StopEdit, {kind: "custom"}>;
+
+/** Resolves an added place (search text or coordinates) into a custom stop with a fresh id. */
+async function resolvePlace(stop: Exclude<RouteStopInput, {id: string}>): Promise<CustomStop> {
+  let latitude: number;
+  let longitude: number;
+  let name: string;
+  if ("query" in stop) {
+    const resolved = await resolveLocation(stop.query, {router, forwardGeocode: (query) => geocoder.forward(query)});
+    if (!resolved) throw new Error(`Could not find location: ${stop.query}`);
+    [latitude, longitude] = resolved;
+    name = stop.name?.trim() || shortName(stop.query);
+  } else {
+    ({latitude, longitude, name} = stop);
+  }
+  // Each added place gets its own id, so the same place can be added twice and removed one at a time.
+  return {kind: "custom", latitude, longitude, name, id: randomId()};
+}
+
+function rememberNames(stored: StoredTrip, stops: CustomStop[]) {
+  for (const stop of stops) if (stop.id) stored.customNames[stop.id] = stop.name;
+}
+
 /**
  * Re-orders the route and/or adds places, then re-routes and re-times the trip. Existing points
  * are passed by id; new places by search text (resolved through Nominatim) or coordinates.
@@ -224,32 +247,31 @@ export async function updateStops(tripId: string, stops: RouteStopInput[]): Prom
   const stored = trips.get(tripId);
   if (!stored) throw new Error("Trip not found");
   const edits: StopEdit[] = [];
-  const names: Array<[string, string]> = [];
+  const added: CustomStop[] = [];
   for (const stop of stops) {
     if ("id" in stop) {
       edits.push({kind: "observation", id: stop.id});
       continue;
     }
-    let latitude: number;
-    let longitude: number;
-    let name: string;
-    if ("query" in stop) {
-      const resolved = await resolveLocation(stop.query, {router, forwardGeocode: (query) => geocoder.forward(query)});
-      if (!resolved) throw new Error(`Could not find location: ${stop.query}`);
-      [latitude, longitude] = resolved;
-      name = stop.name?.trim() || shortName(stop.query);
-    } else {
-      ({latitude, longitude, name} = stop);
-    }
-    // Each added place gets its own id, so the same place can be added twice and removed one at a time.
-    const id = randomId();
-    names.push([id, name]);
-    edits.push({kind: "custom", latitude, longitude, name, id});
+    const place = await resolvePlace(stop);
+    added.push(place);
+    edits.push(place);
   }
   const updated = await applyStopEdits(stored.analyzed, edits, {router});
-  for (const [id, name] of names) stored.customNames[id] = name;
+  rememberNames(stored, added);
   stored.analyzed = updated;
   return payload(tripId);
+}
+
+/** Builds a trip from places alone, for people with no geotagged photos or videos. */
+export async function planTrip(stops: Exclude<RouteStopInput, {id: string}>[]): Promise<TripData> {
+  const places: CustomStop[] = [];
+  for (const stop of stops) places.push(await resolvePlace(stop));
+  const analyzed = await analyzePlaces(places, {router});
+  const stored: StoredTrip = {analyzed, places: new Map(), customNames: {}, endpoints: {}};
+  rememberNames(stored, places);
+  trips.set(analyzed.trip.id, stored);
+  return payload(analyzed.trip.id);
 }
 
 /** Original media for a trip, used by the in-browser MP4 export. */

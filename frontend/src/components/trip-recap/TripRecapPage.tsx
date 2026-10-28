@@ -8,6 +8,7 @@ import {Toaster, toast} from "sonner";
 import LocationAutocomplete from "@/components/trip-recap/LocationAutocomplete";
 import MapPreview, {type MapPreviewHandle} from "@/components/trip-recap/MapPreview";
 import MediaQueue, {type MediaUploadRecord} from "@/components/trip-recap/MediaQueue";
+import PlacePlanner, {type PlannedPlace} from "@/components/trip-recap/PlacePlanner";
 import Segmented from "@/components/trip-recap/Segmented";
 import StopEditor from "@/components/trip-recap/StopEditor";
 import {ARROW, FRAME_IDS, FRAMES, type FrameId, MAP_STYLE_IDS, MAP_STYLES, type MapStyleId} from "@/lib/recap-scene";
@@ -15,6 +16,7 @@ import {
   analyzeSession,
   discardUploadedMedia,
   fetchPlaces,
+  planTrip,
   renameStop,
   updateStops,
   type RouteStopInput,
@@ -102,6 +104,7 @@ export default function TripRecapPage() {
   const [status, setStatus] = useState("");
   const [statusTone, setStatusTone] = useState<"neutral" | "success" | "error">("neutral");
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [plannedPlaces, setPlannedPlaces] = useState<PlannedPlace[]>([]);
   const exporting = exportProgress !== null;
 
   recordsRef.current = records;
@@ -266,6 +269,28 @@ export default function TripRecapPage() {
     }
   }, [endLocation, keepAsOneTrip, readyToAnalyze, retainedRecords, returnToStart, sessionId, startLocation]);
 
+  const planRoute = useCallback(async () => {
+    if (plannedPlaces.length < 2) return;
+    setAnalyzing(true);
+    setStatus("Finding your places and tracing the roads between them…");
+    setStatusTone("neutral");
+    try {
+      setTrip(await planTrip(plannedPlaces.map((place) => place.stop)));
+      setVideo(null);
+      window.scrollTo({top: 0});
+      setStatus("Route ready. Stops below can be reordered, renamed or added to.");
+      setStatusTone("success");
+      toast.success("Route traced from your places");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Route planning failed";
+      setStatus(message);
+      setStatusTone("error");
+      toast.error(message);
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [plannedPlaces]);
+
   const refreshPlaces = useCallback(async (target: TripData, granularity: PlaceDetail) => {
     try {
       const apply = (places: Record<string, string>) =>
@@ -412,7 +437,9 @@ export default function TripRecapPage() {
   };
 
   const summary = trip
-    ? `${trip.summary.stop_count} stops · ${formatDistance(trip.summary.distance_meters)} · ${formatSpan(trip.summary.started_at, trip.summary.ended_at)} · ${trip.summary.gps_media_count}/${trip.summary.media_count} geotagged`
+    ? trip.summary.media_count === 0
+      ? `${trip.summary.stop_count} stops · ${formatDistance(trip.summary.distance_meters)} · planned from places`
+      : `${trip.summary.stop_count} stops · ${formatDistance(trip.summary.distance_meters)} · ${formatSpan(trip.summary.started_at, trip.summary.ended_at)} · ${trip.summary.gps_media_count}/${trip.summary.media_count} geotagged`
     : retainedRecords.length
       ? `${retainedRecords.length} of ${records.length} files read · build the route when ready`
       : "Photos and videos in, animated route map out";
@@ -471,7 +498,7 @@ export default function TripRecapPage() {
               Add media
               <input type="file" className="visually-hidden" accept={ACCEPTED_MEDIA} multiple disabled={busy} onChange={addFiles} />
             </label>
-            {trip && buildButton}
+            {trip && records.length > 0 && buildButton}
           </div>
         </header>
 
@@ -531,7 +558,7 @@ export default function TripRecapPage() {
                 <summary>Media &amp; options <span>{retainedRecords.length}</span></summary>
                 <div className="drawer-body">
                   <Segmented label="Place names" value={placeDetail} options={PLACE_DETAILS.map((value) => ({value, label: PLACE_DETAIL_LABELS[value]}))} onChange={setPlaceDetail} />
-                  {routeOptions}
+                  {records.length > 0 && routeOptions}
                   <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
                   {gpsNote}
                   <div className="controls">
@@ -586,6 +613,13 @@ export default function TripRecapPage() {
                   {buildButton}
                   {status && <span id="status" className={`exp-status status-${statusTone}`} aria-live="polite">{status}</span>}
                 </div>
+              </div>
+            )}
+            {records.length === 0 && (
+              <div className="empty-setup">
+                <p className="empty-divider" aria-hidden="true">or</p>
+                <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} />
+                {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
               </div>
             )}
             <p className="note">Everything runs in this browser. Files never leave your device; only point coordinates go to the road router (OSRM) and place names (OpenStreetMap).</p>

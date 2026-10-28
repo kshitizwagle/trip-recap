@@ -217,10 +217,10 @@ export function customStopId(latitude: number, longitude: number, name: string):
 export async function applyStopEdits(
   analyzed: AnalyzedTrip,
   stops: StopEdit[],
-  services: Pick<AnalyzeServices, "router">,
+  services: Pick<AnalyzeServices, "router" | "now">,
 ): Promise<AnalyzedTrip> {
   const byId = new Map(analyzed.trip.observations.map((item) => [item.id, item]));
-  const fallbackTime = analyzed.trip.started_at ?? analyzed.trip.observations[0]?.arrival ?? new Date().toISOString();
+  const fallbackTime = analyzed.trip.started_at ?? analyzed.trip.observations[0]?.arrival ?? (services.now?.() ?? new Date()).toISOString();
   const observations: Observation[] = [];
   for (const stop of stops) {
     if (stop.kind === "observation") {
@@ -252,4 +252,27 @@ export async function applyStopEdits(
   }
   const timeline = new TimelineBuilder().build(trip);
   return {trip, route, timeline, routeError};
+}
+
+/**
+ * Builds a trip from places the user picked, with no media at all. Nothing is observed, so the
+ * trip keeps no capture times or GPS media counts; every stop is a custom place and the timeline
+ * paces the legs by distance.
+ */
+export async function analyzePlaces(
+  stops: Extract<StopEdit, {kind: "custom"}>[],
+  services: Pick<AnalyzeServices, "router" | "now">,
+): Promise<AnalyzedTrip> {
+  if (!stops.length) throw new Error("Add at least one place to build a route");
+  if (stops.length > MAX_FILES) throw new Error(`Maximum ${MAX_FILES} places per trip`);
+  const seed = stops.map((stop) => `${stop.latitude.toFixed(6)}:${stop.longitude.toFixed(6)}:${stop.name}`).join("|");
+  const empty: Trip = {
+    id: uuid5(`places:${seed}`),
+    started_at: null,
+    ended_at: null,
+    media: [],
+    observations: [],
+    stats: {media_count: 0, photo_count: 0, video_count: 0, gps_media_count: 0, distance_meters: 0, real_duration_seconds: 0, video_duration_seconds: null},
+  };
+  return applyStopEdits({trip: empty, route: null, timeline: new TimelineBuilder().build(empty), routeError: null}, stops, services);
 }

@@ -116,3 +116,27 @@ test("places fill in one by one, fall back to Photon, and can be renamed; stops 
     globalThis.fetch = originalFetch;
   }
 });
+
+import {planTrip} from "./trip-api.ts";
+
+test("a route can be planned from places without any media", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("nominatim.openstreetmap.org/search")) return Response.json([{lat: "27.656", lon: "85.087", display_name: "Thaha, Makwanpur"}]);
+    assert.match(url, /^https:\/\/router\.project-osrm\.org\/route\/v1\/driving\//);
+    return Response.json({code: "Ok", routes: [{geometry: {coordinates: [[85.324, 27.7172], [85.087, 27.656]]}, distance: 38000, duration: 3600}]});
+  };
+  try {
+    const trip = await planTrip([{latitude: 27.7172, longitude: 85.324, name: "Kathmandu"}, {query: "Thaha"}]);
+    assert.equal(trip.summary.stop_count, 2);
+    assert.equal(trip.summary.media_count, 0);
+    assert.equal(trip.summary.started_at, null);
+    assert.equal(trip.route?.properties.inferred, true);
+    assert.deepEqual(trip.observations.map((item) => item.place), ["Kathmandu", "Thaha"]);
+    assert.deepEqual(trip.observations.map((item) => item.media_files.length), [0, 0]);
+    await assert.rejects(planTrip([]), /at least one place/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
