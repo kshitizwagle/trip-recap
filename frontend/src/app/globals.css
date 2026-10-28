@@ -120,7 +120,7 @@ button, input, select, textarea { font: inherit; }
 /* ---------- Studio: one screen, after the trip-map artifact ---------- */
 .studio { display: flex; flex-direction: column; gap: 14px; max-width: 1280px; margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
 .studio-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.studio-mark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: var(--aura-accent); color: var(--aura-accent-ink); font-weight: 700; }
+.studio-mark { display: block; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 8px; box-shadow: 0 0 0 1px var(--aura-border); }
 .studio-title { flex: 1 1 260px; min-width: 0; }
 .studio-title h1 { margin: 0; font: 600 1.3rem/1.15 var(--aura-serif); }
 .studio-title p { margin: 2px 0 0; color: var(--aura-metadata); font-size: 12.5px; }
@@ -167,6 +167,46 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
 .media-overlay img, .media-overlay video { max-height: 30cqh; }
 .maplibregl-ctrl-attrib { background: rgba(15, 14, 20, 0.6) !important; font-size: 10px; }
 .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { color: var(--aura-muted) !important; }
+
+/* Map leads; the settings panel sits beside it on wide screens and below it on narrow ones. */
+.workspace { display: flex; flex-direction: column; gap: 20px; }
+.panel { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.panel-section { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 4px 0 22px; }
+.panel-section + .panel-section { padding-top: 18px; border-top: 1px solid var(--aura-border); }
+.panel-title { margin: 0; color: var(--aura-fg); font: 600 1.05rem/1.2 var(--aura-serif); }
+.panel .grp { flex-direction: column; align-items: flex-start; gap: 6px; }
+.panel-pair { display: flex; flex-wrap: wrap; gap: 14px 24px; }
+.panel-section .controls { gap: 10px; }
+.panel-section .export-progress { width: 100%; }
+.panel-notes { display: flex; flex-direction: column; gap: 6px; padding-bottom: 18px; }
+
+@media (min-width: 960px) {
+  /* A working tool: use the whole window rather than a centred reading column. */
+  .studio { max-width: none; padding-inline: 24px; }
+  .workspace {
+    --panel-min: 340px;
+    display: grid; grid-template-columns: min-content minmax(var(--panel-min), 1fr);
+    gap: 24px; align-items: start;
+  }
+  .stage-holder { position: sticky; top: 16px; }
+  /* Height-led sizing, capped so the panel always keeps its minimum width. */
+  .map-canvas-frame {
+    width: min(
+      calc(100vw - 48px - var(--panel-min) - 24px - 16px),
+      calc(max(360px, 100dvh - 150px) * var(--frame-ratio, 0.5625))
+    );
+  }
+  .stage-holder .map-frame .controls { flex-wrap: nowrap; }
+  .stage-holder .scrub { flex-basis: 120px; }
+  /* Settings sections sit side by side when the panel is wide, and stack when it is narrow. */
+  .panel {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); column-gap: 40px;
+    padding: 6px 28px 8px; border-radius: 8px;
+    background: var(--aura-bg-deep); box-shadow: 0 0 0 1px var(--aura-border);
+  }
+  .panel > :not(.panel-section) { grid-column: 1 / -1; }
+  .panel-section, .panel-section + .panel-section { padding-top: 22px; border-top: 0; }
+}
 
 .drawer { border-top: 1px solid var(--aura-border); }
 .drawer summary { display: flex; align-items: center; gap: 8px; padding: 12px 0; color: var(--aura-muted); font-size: 13px; cursor: pointer; list-style: none; }

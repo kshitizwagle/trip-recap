@@ -461,7 +461,7 @@ export default function TripRecapPage() {
     <Theme theme={tripRecapTheme} mode="dark">
       <div className="studio">
         <header className="studio-head">
-          <span className="studio-mark" aria-hidden="true">↗</span>
+          <img className="studio-mark" src="/icon.svg" alt="" aria-hidden="true" width={34} height={34} />
           <div className="studio-title">
             <h1>Trip Recap</h1>
             <p>{summary}</p>
@@ -476,59 +476,75 @@ export default function TripRecapPage() {
         </header>
 
         {trip ? (
-          <>
+          <div className="workspace">
             <div className="stage-holder">
-              <MapPreview ref={mapRef} data={trip} styleId={styleId} frame={frame} vehicle={vehicle} playbackSpeed={playbackSpeed}>
+              <MapPreview ref={mapRef} data={trip} styleId={styleId} frame={frame} vehicle={vehicle} playbackSpeed={playbackSpeed} />
+            </div>
+
+            <aside className="panel" aria-label="Recap settings">
+              <section className="panel-section">
+                <h2 className="panel-title">Look</h2>
                 <Segmented label="Map" value={styleId} options={MAP_STYLE_IDS.map((id) => ({value: id, label: MAP_STYLES[id].label}))} onChange={setStyleId} />
-                <Segmented label="Speed" value={playbackSpeed} options={SPEEDS.map((value) => ({value, label: value === 0.5 ? "½×" : `${value}×`}))} onChange={setPlaybackSpeed} />
-                <Segmented label="Frame" value={frame} options={FRAME_IDS.map((id) => ({value: id, label: SHORT_FRAME[id] ?? FRAMES[id].label}))} onChange={setFrame} />
                 <Segmented label="Marker" value={vehicle} options={VEHICLES.map((value) => ({value, label: value === ARROW ? "Arrow" : value}))} onChange={(value) => setVehicle(value as Vehicle)} />
-              </MapPreview>
-            </div>
-
-            <div className="controls">
-              {exporting ? (
-                <button type="button" className="btn" onClick={() => exportAbortRef.current?.abort()}>Cancel</button>
-              ) : (
-                <button type="button" id="render" className="btn primary" disabled={busy || !exportSupported} onClick={requestExport}>Export video</button>
-              )}
-              <Segmented label="Quality" value={quality} options={EXPORT_QUALITIES.map((value) => ({value, label: `${value}p`}))} onChange={setQuality} isDisabled={exporting} />
-              <Segmented label="FPS" value={fps} options={EXPORT_FRAME_RATES.map((value) => ({value, label: String(value)}))} onChange={setFps} isDisabled={exporting} />
-              {exporting && <progress className="export-progress" max={100} value={exportPercent} aria-label="Export progress" />}
-              <span className="exp-status" role="status">{exportText}</span>
-              {video && (
-                <button type="button" id="video-download" className="btn primary" onClick={() => download(video.blob, "trip-recap.mp4")}>Download MP4</button>
-              )}
-            </div>
-
-            {!exportSupported && <p className="note status-error">This browser cannot encode video. Use a recent Chrome, Edge or Safari.</p>}
-            {trip.route_error && <p className="note status-error">Routing note: {trip.route_error}</p>}
-            {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
-
-            <details className="drawer">
-              <summary>Stops <span>{trip.observations.length}</span></summary>
-              <div className="drawer-body">
-                <StopEditor trip={trip} busy={busy || editingRoute} onMove={moveStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
-              </div>
-            </details>
-
-            <details className="drawer" open={optionsOpen} onToggle={(event) => setOptionsOpen((event.target as HTMLDetailsElement).open)}>
-              <summary>Media &amp; options <span>{retainedRecords.length}</span></summary>
-              <div className="drawer-body">
-                <Segmented label="Place names" value={placeDetail} options={PLACE_DETAILS.map((value) => ({value, label: PLACE_DETAIL_LABELS[value]}))} onChange={setPlaceDetail} />
-                {routeOptions}
-                <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
-                {gpsNote}
-                <div className="controls">
-                  {(["trip", "route", "timeline"] as JsonTab[]).map((kind) => (
-                    <button key={kind} type="button" className="btn small" onClick={() => download(new Blob([JSON.stringify(jsonValues[kind], null, 2)], {type: "application/json"}), kind === "route" ? "route.geojson" : `${kind}.json`)}>
-                      {kind === "route" ? "route.geojson" : `${kind}.json`}
-                    </button>
-                  ))}
+                <div className="panel-pair">
+                  <Segmented label="Frame" value={frame} options={FRAME_IDS.map((id) => ({value: id, label: SHORT_FRAME[id] ?? FRAMES[id].label}))} onChange={setFrame} />
+                  <Segmented label="Speed" value={playbackSpeed} options={SPEEDS.map((value) => ({value, label: value === 0.5 ? "½×" : `${value}×`}))} onChange={setPlaybackSpeed} />
                 </div>
-              </div>
-            </details>
-          </>
+              </section>
+
+              <section className="panel-section">
+                <h2 className="panel-title">Export</h2>
+                <div className="panel-pair">
+                  <Segmented label="Quality" value={quality} options={EXPORT_QUALITIES.map((value) => ({value, label: `${value}p`}))} onChange={setQuality} isDisabled={exporting} />
+                  <Segmented label="FPS" value={fps} options={EXPORT_FRAME_RATES.map((value) => ({value, label: String(value)}))} onChange={setFps} isDisabled={exporting} />
+                </div>
+                <div className="controls">
+                  {exporting ? (
+                    <button type="button" className="btn" onClick={() => exportAbortRef.current?.abort()}>Cancel</button>
+                  ) : (
+                    <button type="button" id="render" className="btn primary" disabled={busy || !exportSupported} onClick={requestExport}>Export video</button>
+                  )}
+                  {video && (
+                    <button type="button" id="video-download" className="btn primary" onClick={() => download(video.blob, "trip-recap.mp4")}>Download MP4</button>
+                  )}
+                </div>
+                {exporting && <progress className="export-progress" max={100} value={exportPercent} aria-label="Export progress" />}
+                <span className="exp-status" role="status">{exportText}</span>
+              </section>
+
+              {(!exportSupported || trip.route_error || status) && (
+                <div className="panel-notes">
+                  {!exportSupported && <p className="note status-error">This browser cannot encode video. Use a recent Chrome, Edge or Safari.</p>}
+                  {trip.route_error && <p className="note status-error">Routing note: {trip.route_error}</p>}
+                  {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
+                </div>
+              )}
+
+              <details className="drawer" open>
+                <summary>Stops <span>{trip.observations.length}</span></summary>
+                <div className="drawer-body">
+                  <StopEditor trip={trip} busy={busy || editingRoute} onMove={moveStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
+                </div>
+              </details>
+  
+              <details className="drawer" open={optionsOpen} onToggle={(event) => setOptionsOpen((event.target as HTMLDetailsElement).open)}>
+                <summary>Media &amp; options <span>{retainedRecords.length}</span></summary>
+                <div className="drawer-body">
+                  <Segmented label="Place names" value={placeDetail} options={PLACE_DETAILS.map((value) => ({value, label: PLACE_DETAIL_LABELS[value]}))} onChange={setPlaceDetail} />
+                  {routeOptions}
+                  <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                  {gpsNote}
+                  <div className="controls">
+                    {(["trip", "route", "timeline"] as JsonTab[]).map((kind) => (
+                      <button key={kind} type="button" className="btn small" onClick={() => download(new Blob([JSON.stringify(jsonValues[kind], null, 2)], {type: "application/json"}), kind === "route" ? "route.geojson" : `${kind}.json`)}>
+                        {kind === "route" ? "route.geojson" : `${kind}.json`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </details>
+            </aside>
+          </div>
         ) : (
           <section className="empty-stage" aria-label="Add media">
             <div className="empty-copy">
