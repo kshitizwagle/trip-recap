@@ -25,6 +25,7 @@ import {
 } from "@/lib/trip-api";
 import {canExportVideo, EXPORT_FRAME_RATES, EXPORT_MAX_SECONDS, EXPORT_QUALITIES, exportDimensions, exportRecapVideo, type ExportFrameRate, type ExportProgress, type ExportQuality} from "@/lib/recap-export";
 import {
+  LARGE_UPLOAD_COUNT,
   MAX_CONCURRENT_UPLOADS,
   MAX_FILE_LABEL,
   canAnalyze,
@@ -34,7 +35,6 @@ import {
 import type {TripData} from "@/lib/trip-types";
 import {randomId} from "@/lib/engine/ids";
 
-const ACCEPTED_MEDIA = ".jpg,.jpeg,.heic,.heif,.png,.webp,.mov,.mp4,.m4v,image/*,video/*";
 const VEHICLES = [ARROW, "🛵", "🚗", "🏍️", "🚲"] as const;
 const PLACE_DETAILS = ["specific", "neighborhood", "city", "region"] as const;
 const SPEEDS = [0.5, 1, 2] as const;
@@ -193,7 +193,7 @@ export default function TripRecapPage() {
       const files = value ? (Array.isArray(value) ? value : [value]) : [];
       if (!files.length) return;
       clearResult();
-      const {accepted, rejected} = partitionFiles(files);
+      const {accepted, rejected, unsupported} = partitionFiles(files);
       const nextRecords: MediaUploadRecord[] = accepted.map((file) => ({
         clientId: randomId(),
         file,
@@ -207,6 +207,9 @@ export default function TripRecapPage() {
       setRecords((current) => [...current, ...nextRecords]);
       setStatus("");
       setStatusTone("neutral");
+      if (unsupported.length) {
+        toast.error(`Skipped ${unsupported.length} file${unsupported.length === 1 ? "" : "s"} that ${unsupported.length === 1 ? "isn't a" : "aren't"} supported photo${unsupported.length === 1 ? "" : "s"} or video${unsupported.length === 1 ? "" : "s"}`);
+      }
       if (rejected.length) {
         toast.error(`${rejected.map((file) => `"${file.name}"`).join(", ")} ${rejected.length === 1 ? "exceeds" : "exceed"} the ${MAX_FILE_LABEL} limit`);
       } else if (accepted.length) {
@@ -444,6 +447,13 @@ export default function TripRecapPage() {
       ? `${retainedRecords.length} of ${records.length} files read · build the route when ready`
       : "Photos and videos in, animated route map out";
 
+  const largeUploadNote = records.length > LARGE_UPLOAD_COUNT && (
+    <div className="gps-note" role="note">
+      <strong>{records.length} files added.</strong>
+      <span>More than {LARGE_UPLOAD_COUNT} files can make the site slow, especially on phones: reading, previewing and exporting all take longer.</span>
+    </div>
+  );
+
   const gpsNote = missingGps > 0 && (
     <div className="gps-note" role="note">
       <strong>{missingGps === retainedRecords.length ? "None of these files have a location." : `${missingGps} of ${retainedRecords.length} files have no location.`}</strong>
@@ -496,7 +506,7 @@ export default function TripRecapPage() {
           <div className="studio-actions">
             <label className={busy ? "btn is-disabled" : "btn"}>
               Add media
-              <input type="file" className="visually-hidden" accept={ACCEPTED_MEDIA} multiple disabled={busy} onChange={addFiles} />
+              <input type="file" className="visually-hidden" multiple disabled={busy} onChange={addFiles} />
             </label>
             {trip && records.length > 0 && buildButton}
           </div>
@@ -560,6 +570,7 @@ export default function TripRecapPage() {
                   <Segmented label="Place names" value={placeDetail} options={PLACE_DETAILS.map((value) => ({value, label: PLACE_DETAIL_LABELS[value]}))} onChange={setPlaceDetail} />
                   {records.length > 0 && routeOptions}
                   <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                  {largeUploadNote}
                   {gpsNote}
                   <div className="controls">
                     {(["trip", "route", "timeline"] as JsonTab[]).map((kind) => (
@@ -588,7 +599,6 @@ export default function TripRecapPage() {
                   isLabelHidden
                   value={null}
                   onChange={handleFiles}
-                  accept={ACCEPTED_MEDIA}
                   isMultiple
                   mode="dropzone"
                   placeholder="Drop photos and videos, or choose files"
@@ -609,6 +619,7 @@ export default function TripRecapPage() {
               {records.length > 0 && (
                 <div className="empty-setup">
                   <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+                  {largeUploadNote}
                   {gpsNote}
                   {routeOptions}
                   <div className="controls">

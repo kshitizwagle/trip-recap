@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   MAX_FILE_BYTES,
   canAnalyze,
+  isSupportedMedia,
   partitionFiles,
   resetUploadForRetry,
 } from "./upload-queue.ts";
@@ -17,6 +18,25 @@ test("accepts files at the limit and rejects files above it", () => {
 
   assert.deepEqual(result.accepted.map((item) => item.name), ["exact.jpg"]);
   assert.deepEqual(result.rejected.map((item) => item.name), ["too-large.mov"]);
+});
+
+test("skips files the metadata parser cannot read", () => {
+  const result = partitionFiles([
+    file("IMG_0001.HEIC", 10),
+    file("clip.mov", 10),
+    file("notes.txt", 10),
+    file("scan.pdf", 10),
+    file("1000012345", 10),
+  ]);
+
+  assert.deepEqual(result.accepted.map((item) => item.name), ["IMG_0001.HEIC", "clip.mov", "1000012345"]);
+  assert.deepEqual(result.unsupported.map((item) => item.name), ["notes.txt", "scan.pdf"]);
+});
+
+test("keeps extensionless files only when their MIME type could be media", () => {
+  assert.equal(isSupportedMedia({name: "1000012345", type: "image/jpeg"}), true);
+  assert.equal(isSupportedMedia({name: "1000012345", type: ""}), true);
+  assert.equal(isSupportedMedia({name: "1000012345", type: "application/pdf"}), false);
 });
 
 test("does not allow analysis while a retained upload is pending", () => {

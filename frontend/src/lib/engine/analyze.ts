@@ -9,8 +9,6 @@ import {buildRoute, type Router, routeProgresses} from "./routing.ts";
 import {TimelineBuilder} from "./timeline.ts";
 import type {LocationSuggestion} from "./places.ts";
 
-export const MAX_FILES = 100;
-
 export interface AnalyzeOptions {
   keepAsOneTrip: boolean;
   startLocation: string | null;
@@ -116,7 +114,6 @@ export async function analyzeMedia(
   services: AnalyzeServices,
 ): Promise<AnalyzedTrip[]> {
   if (!media.length) throw new Error("No retained media to analyze");
-  if (media.length > MAX_FILES) throw new Error(`Maximum ${MAX_FILES} files per trip`);
 
   const start = await resolveLocation(options.startLocation, services);
   const end = options.returnToStart ? null : await resolveLocation(options.endLocation, services);
@@ -264,7 +261,6 @@ export async function analyzePlaces(
   services: Pick<AnalyzeServices, "router" | "now">,
 ): Promise<AnalyzedTrip> {
   if (!stops.length) throw new Error("Add at least one place to build a route");
-  if (stops.length > MAX_FILES) throw new Error(`Maximum ${MAX_FILES} places per trip`);
   const seed = stops.map((stop) => `${stop.latitude.toFixed(6)}:${stop.longitude.toFixed(6)}:${stop.name}`).join("|");
   const empty: Trip = {
     id: uuid5(`places:${seed}`),
