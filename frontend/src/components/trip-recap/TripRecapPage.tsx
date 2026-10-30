@@ -761,9 +761,10 @@ export default function TripRecapPage() {
         )}
         {!trip && (
           <footer className="studio-foot">
-            <span>Trip Recap is open source.</span>
+            <span>Trip Recap is source-available for noncommercial use.</span>
             <nav aria-label="Footer">
               <a href={REPO_URL}>Source</a>
+              <a href={`${REPO_URL}/blob/main/LICENSE`}>License</a>
               <a href={`${REPO_URL}/issues`}>Report an issue</a>
               <a href={`${REPO_URL}/blob/main/PRIVACY.md`}>Privacy</a>
               <a href="https://www.openstreetmap.org/copyright">Map data © OpenStreetMap contributors</a>

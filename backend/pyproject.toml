@@ -2,6 +2,7 @@
 name = "trip-recap"
 version = "0.2.0"
 description = "Metadata-driven road-trip reconstruction and recap generation"
+license = "PolyForm-Noncommercial-1.0.0"
 requires-python = "==3.12.*"
 dependencies = [
     "fastapi[standard]>=0.141,<1",

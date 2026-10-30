@@ -46,3 +46,12 @@ See [deployment instructions](docs/deployment.md) for Cloudflare.
 Metadata reading, routing and preview work in any current browser. MP4 export needs
 WebCodecs H.264 encoding: recent Chrome, Edge and Safari. HEIC previews show in Safari;
 other browsers still read HEIC metadata but show a placeholder instead of the image.
+
+## License
+
+Trip Recap is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may
+use, change and share it for any noncommercial purpose: personal use, hobby projects, research,
+education, and work by charities and public bodies. Commercial use is not permitted.
+
+Bundled libraries, fonts, map data and services keep their own licenses and terms; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
