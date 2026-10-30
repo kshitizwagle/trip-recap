@@ -7,7 +7,7 @@ import {parseIso6709} from "./engine/metadata/quicktime.ts";
 import {buildHeic, buildJpeg, buildMp4, buildTiff} from "./engine/test-fixtures.ts";
 import type {MediaPoint} from "./engine/models.ts";
 import {TripBuilder} from "./engine/trip.ts";
-import {compressGapSeconds, moveSeconds, TimelineBuilder, visibleMediaAt} from "./engine/timeline.ts";
+import {compressGapSeconds, legProgress, moveSeconds, STOP_PASS_SPEED, TimelineBuilder} from "./engine/timeline.ts";
 import {buildRoute, OSRMRouter, RouteCache, routeProgresses} from "./engine/routing.ts";
 import {formatPlaceName, NominatimGeocoder} from "./engine/places.ts";
 import {analyzeMedia, applyRouteEndpoints, parseCoordinates, tripPayload} from "./engine/analyze.ts";
@@ -224,21 +224,32 @@ test("the traveller sets off within a second, even with photos at the first stop
   const timeline = new TimelineBuilder().build(trip);
   const firstMove = timeline.events.find((event) => event.type === "move");
   assert.ok(firstMove && firstMove.video_time < 1, `first move at ${firstMove?.video_time}`);
-  assert.equal(visibleMediaAt(timeline, 1.2)?.mediaId, "m1");
   const times = timeline.events.map((event) => event.video_time);
   assert.deepEqual(times, [...times].sort((a, b) => a - b), "events stay sorted");
   assert.ok(timeline.duration_seconds >= Math.max(...times));
 });
 
-test("timeline is deterministic and shows each media once", () => {
-  const [trip] = new TripBuilder().build([point("m1", 0, 40.75, -74.0), point("m2", 120, 40.78, -73.97)]);
+test("timeline is deterministic and its legs run back to back", () => {
+  const [trip] = new TripBuilder().build([point("m1", 0, 40.75, -74.0), point("m2", 120, 40.78, -73.97), point("m3", 600, 40.8, -73.95)]);
   const first = new TimelineBuilder().build(structuredClone(trip));
   const second = new TimelineBuilder().build(structuredClone(trip));
   assert.deepEqual(first, second);
   assert.ok(first.duration_seconds > 0);
-  assert.equal(first.events.filter((event) => event.type === "media_show").length, 2);
-  assert.equal(visibleMediaAt(first, 1.1)?.mediaId, "m1");
-  assert.equal(visibleMediaAt(first, first.duration_seconds), null);
+  const moves = first.events.filter((event) => event.type === "move");
+  assert.equal(moves.length, 2);
+  close(moves[1].video_time, moves[0].video_time + Number(moves[0].payload.duration_seconds), 1e-9);
+  assert.equal(first.events.filter((event) => event.type.startsWith("media_")).length, 0);
+});
+
+test("legs slow into a stop without stopping, and rest only at the route's ends", () => {
+  const speed = (t: number, a: number, b: number) => (legProgress(t + 1e-6, a, b) - legProgress(t - 1e-6, a, b)) / 2e-6;
+  close(legProgress(0, 0.3, 0.3), 0, 1e-12);
+  close(legProgress(1, 0.3, 0.3), 1, 1e-12);
+  close(legProgress(1, 0, 0.3), 1, 1e-12);
+  close(speed(0.000002, STOP_PASS_SPEED, STOP_PASS_SPEED), STOP_PASS_SPEED, 1e-3);
+  close(speed(0.999998, 0, 0), 0, 1e-3);
+  assert.ok(speed(0.5, STOP_PASS_SPEED, STOP_PASS_SPEED) > 3 * STOP_PASS_SPEED, "cruises well above the stop speed mid-leg");
+  for (let t = 0; t < 1; t += 0.01) assert.ok(legProgress(t + 0.01, 0, STOP_PASS_SPEED) >= legProgress(t, 0, STOP_PASS_SPEED), "never goes backwards");
 });
 
 function osrmResponse(coordinates: number[][], distance: number) {
@@ -279,7 +290,13 @@ test("route assembly joins segments and computes observation progress", async ()
   });
   assert.equal(route.geometry.length, 3);
   assert.equal(route.distance_meters, 4000);
-  assert.deepEqual(routeProgresses(route, 3), [0, 0.25, 1]);
+  // Progress follows the drawn line, not the router's reported distances.
+  const ab = haversineMeters(40.75, -74, 40.78, -73.97);
+  const bc = haversineMeters(40.78, -73.97, 40.8, -73.95);
+  const [first, middle, last] = routeProgresses(route, 3);
+  assert.equal(first, 0);
+  close(middle, ab / (ab + bc), 1e-12);
+  assert.equal(last, 1);
   assert.deepEqual(routeProgresses(null, 3), [0, 0.5, 1]);
 });
 
@@ -349,7 +366,7 @@ test("analyzeMedia builds a trip payload with inferred route and keeps routing e
 
 import {playbackStateAt} from "./engine/timeline.ts";
 
-test("playback eases between stops and holds while media shows", () => {
+test("playback slows through stops and comes to rest at the end", () => {
   const [trip] = new TripBuilder().build([point("a", 0, 40.75, -74.0), point("b", 120, 40.78, -73.97), point("c", 240, 40.8, -73.95)]);
   const timeline = new TimelineBuilder().build(trip);
   const observations = trip.observations.map((item, i) => ({id: item.id, progress: [0, 0.4, 1][i]}));
@@ -359,12 +376,13 @@ test("playback eases between stops and holds while media shows", () => {
   const first = moves[0];
   const mid = playbackStateAt(timeline, observations, first.video_time + Number(first.payload.duration_seconds) / 2);
   assert.equal(mid.phase, "move");
-  close(mid.progress, 0.2, 1e-9);
+  close(mid.progress, 0.4 * legProgress(0.5, 0, STOP_PASS_SPEED), 1e-9);
   assert.equal(mid.toIndex, 1);
-  const holding = playbackStateAt(timeline, observations, first.video_time + Number(first.payload.duration_seconds) + 0.5);
-  assert.equal(holding.phase, "stop");
-  assert.equal(holding.progress, 0.4);
-  assert.equal(holding.atIndex, 1);
+  // Just past the first stop the traveller is already on the next leg.
+  const after = playbackStateAt(timeline, observations, first.video_time + Number(first.payload.duration_seconds) + 0.05);
+  assert.equal(after.phase, "move");
+  assert.equal(after.atIndex, 1);
+  assert.ok(after.progress > 0.4);
   const end = playbackStateAt(timeline, observations, timeline.duration_seconds);
   assert.equal(end.phase, "outro");
   assert.equal(end.progress, 1);

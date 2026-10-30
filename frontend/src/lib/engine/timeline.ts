@@ -1,6 +1,6 @@
 // Port of backend/app/timeline.
 
-import type {MediaPoint, Observation, Timeline, TimelineEvent, Trip} from "./models.ts";
+import type {Observation, Timeline, TimelineEvent, Trip} from "./models.ts";
 import {timeMs} from "./models.ts";
 import {haversineMeters} from "./geo.ts";
 
@@ -45,15 +45,13 @@ export function compressGapSeconds(realSeconds: number): number {
   throw new Error("unreachable");
 }
 
+/**
+ * Speed at an intermediate stop as a share of the leg's average, so the traveller slows into each
+ * point and carries on without stopping. The route's first start and last arrival ease from and to rest.
+ */
+export const STOP_PASS_SPEED = 0.3;
+
 export class TimelineBuilder {
-  readonly mediaFadeSeconds: number;
-  readonly mediaHoldSeconds: number;
-
-  constructor(mediaFadeSeconds = 0.4, mediaHoldSeconds = 2.5) {
-    this.mediaFadeSeconds = mediaFadeSeconds;
-    this.mediaHoldSeconds = mediaHoldSeconds;
-  }
-
   build(trip: Trip): Timeline {
     const events: TimelineEvent[] = [
       {video_time: 0, type: "route_start", payload: {}},
@@ -61,11 +59,9 @@ export class TimelineBuilder {
     ];
     let cursor = INTRO_SECONDS;
     const observations = trip.observations;
-    const mediaById = new Map(trip.media.map((item) => [item.id, item]));
+    if (observations.length) events.push(...arrival(observations[0], cursor));
 
-    // The first stop's media plays while the traveller sets off, so the trip starts moving right away.
-    if (observations.length) this.emitObservation(events, observations[0], mediaById, cursor);
-
+    // Legs run back to back: the traveller never holds at a stop, it only slows through it.
     for (let i = 1; i < observations.length; i += 1) {
       const previous = observations[i - 1];
       const current = observations[i];
@@ -88,11 +84,9 @@ export class TimelineBuilder {
         payload: {from_observation_id: previous.id, to_observation_id: current.id, duration_seconds: moveDuration},
       });
       cursor += moveDuration;
-      cursor = this.emitObservation(events, current, mediaById, cursor);
+      events.push(...arrival(current, cursor));
     }
 
-    // First-stop media can outlast the first move; keep the end after every event.
-    cursor = Math.max(cursor, ...events.map((event) => event.video_time));
     events.push({video_time: cursor, type: "camera_overview", payload: {}});
     events.push({video_time: cursor + 1.5, type: "route_end", payload: {}});
     events.sort((a, b) => a.video_time - b.video_time);
@@ -100,43 +94,13 @@ export class TimelineBuilder {
     trip.stats.video_duration_seconds = duration;
     return {duration_seconds: duration, events};
   }
-
-  private emitObservation(
-    events: TimelineEvent[],
-    observation: Observation,
-    mediaById: Map<string, MediaPoint>,
-    start: number,
-  ): number {
-    let cursor = start;
-    events.push({video_time: cursor, type: "location_arrival", payload: {observation_id: observation.id}});
-    events.push({video_time: cursor, type: "camera_zoom", payload: {observation_id: observation.id}});
-    for (const mediaId of observation.media_ids) {
-      const media = mediaById.get(mediaId);
-      if (!media) continue;
-      events.push({
-        video_time: cursor,
-        type: "media_show",
-        payload: {media_id: media.id, filename: media.filename, fade_seconds: this.mediaFadeSeconds},
-      });
-      cursor += this.mediaFadeSeconds + this.mediaHoldSeconds;
-      events.push({video_time: cursor, type: "media_hide", payload: {media_id: media.id, fade_seconds: this.mediaFadeSeconds}});
-      cursor += this.mediaFadeSeconds;
-    }
-    return cursor;
-  }
 }
 
-/** Which media is visible at a timeline time (shared by preview and export). */
-export function visibleMediaAt(timeline: Timeline, time: number): {mediaId: string; shownAt: number} | null {
-  let visible: {mediaId: string; shownAt: number} | null = null;
-  for (const event of timeline.events) {
-    if (event.video_time > time) break;
-    const mediaId = event.payload.media_id;
-    if (typeof mediaId !== "string") continue;
-    if (event.type === "media_show") visible = {mediaId, shownAt: event.video_time};
-    if (event.type === "media_hide" && visible?.mediaId === mediaId) visible = null;
-  }
-  return visible;
+function arrival(observation: Observation, time: number): TimelineEvent[] {
+  return [
+    {video_time: time, type: "location_arrival", payload: {observation_id: observation.id}},
+    {video_time: time, type: "camera_zoom", payload: {observation_id: observation.id}},
+  ];
 }
 
 export interface PlaybackState {
@@ -152,14 +116,20 @@ export interface PlaybackState {
   phase: "intro" | "move" | "stop" | "outro";
 }
 
-export function easeInOutCubic(value: number): number {
-  const x = Math.max(0, Math.min(1, value));
-  return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
+/**
+ * Share of a leg covered at `t` (0..1) when the speed starts at `startSpeed` and ends at `endSpeed`
+ * (both relative to the leg's average) and swells smoothly in between.
+ */
+export function legProgress(t: number, startSpeed: number, endSpeed: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  const swell = (1 - (startSpeed + endSpeed) / 2) * (Math.PI / 2);
+  return startSpeed * x + ((endSpeed - startSpeed) * x * x) / 2 + (swell * (1 - Math.cos(Math.PI * x))) / Math.PI;
 }
 
 /**
- * Where the traveller is at a timeline time. Moves ease between observation progresses during
- * `move` events and hold still while media shows, so preview and export animate identically.
+ * Where the traveller is at a timeline time. Each `move` slows into its stop and carries on into the
+ * next leg; only the route's first departure and last arrival come to rest. Preview and export both
+ * read this, so they animate identically.
  */
 export function playbackStateAt(
   timeline: Timeline,
@@ -178,7 +148,7 @@ export function playbackStateAt(
   if (!moves.length) return {...state, phase: time > 0 ? "stop" : "intro"};
   if (time < moves[0].video_time) return state;
 
-  for (const move of moves) {
+  for (const [order, move] of moves.entries()) {
     if (time < move.video_time) break;
     const from = progressOf(move.payload.from_observation_id) ?? state.progress;
     const to = progressOf(move.payload.to_observation_id) ?? from;
@@ -187,7 +157,7 @@ export function playbackStateAt(
     const fromIndex = index.get(String(move.payload.from_observation_id)) ?? state.atIndex;
     const raw = (time - move.video_time) / duration;
     if (raw < 1) {
-      const eased = easeInOutCubic(raw);
+      const eased = legProgress(raw, order === 0 ? 0 : STOP_PASS_SPEED, order === moves.length - 1 ? 0 : STOP_PASS_SPEED);
       return {progress: from + (to - from) * eased, atIndex: fromIndex, toIndex, moveProgress: eased, phase: "move"};
     }
     state = {progress: to, atIndex: toIndex, toIndex: null, moveProgress: 1, phase: "stop"};

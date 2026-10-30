@@ -1,5 +1,6 @@
 // Port of backend/app/routing: Router abstraction, OSRM client, cache, route assembly.
 
+import {haversineMeters} from "./geo.ts";
 import type {Coordinate, Route, RouteSegment, Trip} from "./models.ts";
 
 export interface Router {
@@ -124,18 +125,32 @@ export async function buildRoute(trip: Trip, router: Router): Promise<Route> {
   };
 }
 
-/** Distance-based progress of each observation along the route (backend `_route_progresses`). */
+/** Length of a segment's drawn line, in metres. */
+function geometryMeters(geometry: Coordinate[]): number {
+  let total = 0;
+  for (let i = 1; i < geometry.length; i += 1) {
+    total += haversineMeters(geometry[i - 1].latitude, geometry[i - 1].longitude, geometry[i].latitude, geometry[i].longitude);
+  }
+  return total;
+}
+
+/**
+ * Progress of each observation along the route, measured on the drawn line itself (not the router's
+ * reported road distance), so a stop's progress lands exactly where its segment joins the next and
+ * the traveller reaches each stop where the line passes it.
+ */
 export function routeProgresses(route: Route | null, observationCount: number): number[] {
   if (observationCount <= 0) return [];
   if (observationCount === 1) return [0];
   const even = () => Array.from({length: observationCount}, (_, index) => index / (observationCount - 1));
   if (!route || !route.segments.length) return even();
-  const total = route.segments.reduce((sum, segment) => sum + Math.max(segment.distance_meters, 0), 0);
+  const lengths = route.segments.map((segment) => geometryMeters(segment.geometry));
+  const total = lengths.reduce((sum, length) => sum + length, 0);
   if (total <= 0) return even();
   const progresses = [0];
   let distance = 0;
-  for (const segment of route.segments) {
-    distance += Math.max(segment.distance_meters, 0);
+  for (const length of lengths) {
+    distance += length;
     progresses.push(Math.min(1, distance / total));
   }
   while (progresses.length < observationCount) progresses.push(1);
