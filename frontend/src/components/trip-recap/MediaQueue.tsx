@@ -1,6 +1,6 @@
 "use client";
 
-import {Button, ProgressBar, Stack, Text, Token} from "@astryxdesign/core";
+import {useState} from "react";
 import type {UploadRecord} from "@/lib/upload-queue";
 import type {UploadRequest} from "@/lib/trip-api";
 
@@ -22,16 +22,7 @@ interface MediaQueueProps {
   isDisabled?: boolean;
 }
 
-function humanSize(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(1)} ${units[index]}`;
-}
+type Filter = "all" | "no-gps" | "no-time" | "failed";
 
 function capturedLabel(value: string | null): string {
   if (!value) return "no capture time";
@@ -39,7 +30,9 @@ function capturedLabel(value: string | null): string {
 }
 
 function statusLabel(record: MediaUploadRecord): string {
-  if (record.status === "uploaded") return capturedLabel(record.evidence?.capturedAt ?? null);
+  if (record.status === "uploaded") {
+    return `${capturedLabel(record.evidence?.capturedAt ?? null)} · ${record.evidence?.hasGps ? "has location" : "no location"}`;
+  }
   if (record.status === "uploading") return "reading metadata…";
   if (record.status === "failed") return record.message || "could not read this file";
   return "queued";
@@ -49,44 +42,85 @@ function isVideo(record: MediaUploadRecord): boolean {
   return record.file.type.startsWith("video/") || /\.(mov|mp4|m4v)$/i.test(record.file.name);
 }
 
+const matches: Record<Filter, (record: MediaUploadRecord) => boolean> = {
+  all: () => true,
+  "no-gps": (record) => record.status === "uploaded" && !record.evidence?.hasGps,
+  "no-time": (record) => record.status === "uploaded" && !record.evidence?.capturedAt,
+  failed: (record) => record.status === "failed",
+};
+
+/**
+ * The chosen media as a thumbnail grid that scrolls inside its own box, so hundreds of files keep
+ * the page short. Each tile marks whether its location and capture time were found, and filters
+ * pull out the files that need attention.
+ */
 export default function MediaQueue({records, onDiscard, onRetry, isDisabled = false}: MediaQueueProps) {
-  const located = records.filter((record) => record.evidence?.hasGps).length;
+  const [filter, setFilter] = useState<Filter>("all");
+  if (!records.length) return null;
+  const read = records.filter((record) => record.status === "uploaded").length;
+  const counts: Record<Filter, number> = {
+    all: records.length,
+    "no-gps": records.filter(matches["no-gps"]).length,
+    "no-time": records.filter(matches["no-time"]).length,
+    failed: records.filter(matches.failed).length,
+  };
+  const active = counts[filter] ? filter : "all";
+  const shown = records.filter(matches[active]);
+  const reading = read + counts.failed < records.length;
+  const filters: Array<[Filter, string]> = [["all", "All"], ["no-gps", "No location"], ["no-time", "No time"], ["failed", "Failed"]];
+
   return (
-    <Stack as="section" gap={3} id="media-grid" aria-label="Selected trip media" hidden={!records.length}>
-      <Stack direction="horizontal" hAlign="between" vAlign="center" gap={2}>
-        <Text className="eyebrow">media · {records.length}</Text>
-        <Text type="supporting">{located} with GPS</Text>
-      </Stack>
-      <Stack as="ul" gap={0} className="editor-media-list">
-        {records.map((record) => (
-          <Stack as="li" key={record.clientId} direction="horizontal" gap={3} paddingBlock={3} vAlign="center" className="editor-media-row" data-client-id={record.clientId}>
-            <Stack className="editor-media-thumb" hAlign="center" vAlign="center">
-              {isVideo(record) ? (
-                <video src={record.objectUrl ?? undefined} muted playsInline preload="metadata" aria-label={record.file.name} />
-              ) : record.objectUrl ? (
-                <img src={record.objectUrl} alt={record.file.name} onError={(event) => { event.currentTarget.hidden = true; }} />
-              ) : null}
-              <Text type="supporting" className="editor-media-kind" aria-hidden="true">{isVideo(record) ? "VID" : "IMG"}</Text>
-            </Stack>
-            <Stack gap={1} className="editor-media-copy">
-              <Text maxLines={1} weight="medium">{record.file.name}</Text>
-              <Text type="supporting">{humanSize(record.file.size)} · {statusLabel(record)}</Text>
-              {record.status === "uploaded" ? (
-                <Stack direction="horizontal" gap={1} wrap="wrap">
-                  <Token label={record.evidence?.hasGps ? "GPS" : "no GPS"} color={record.evidence?.hasGps ? "teal" : "gray"} size="sm" />
-                  <Token label={record.evidence?.capturedAt ? "time" : "no time"} color={record.evidence?.capturedAt ? "purple" : "gray"} size="sm" />
-                </Stack>
+    <section className="media-queue" id="media-grid" aria-label="Selected trip media">
+      <header className="media-queue__head">
+        <p className="eyebrow">media · {records.length}</p>
+        <p className="media-queue__count">
+          {reading ? `reading ${read + counts.failed} of ${records.length}` : `${records.length - counts["no-gps"] - counts.failed} with location`}
+        </p>
+      </header>
+      {reading && (
+        <span className="media-queue__track" aria-hidden="true">
+          <span className="media-queue__bar" style={{transform: `scaleX(${(read + counts.failed) / records.length})`}} />
+        </span>
+      )}
+      {(counts["no-gps"] > 0 || counts["no-time"] > 0 || counts.failed > 0) && (
+        <div className="media-queue__filters" role="group" aria-label="Show media">
+          {filters.filter(([value]) => value === "all" || counts[value] > 0).map(([value, label]) => (
+            <button key={value} type="button" className="chip" aria-pressed={active === value} onClick={() => setFilter(value)}>
+              {label} <span>{counts[value]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <ul className="media-grid">
+        {shown.map((record) => {
+          const video = isVideo(record);
+          const tone = record.status === "failed" ? "is-failed" : record.status === "uploaded" ? (record.evidence?.hasGps ? "is-located" : "is-unlocated") : "is-pending";
+          return (
+            <li key={record.clientId} className={`media-tile ${tone}`} data-client-id={record.clientId} title={`${record.file.name}\n${statusLabel(record)}`}>
+              <span className="media-tile__kind" aria-hidden="true">{video ? "VID" : "IMG"}</span>
+              {record.objectUrl && (video ? (
+                <video src={`${record.objectUrl}#t=0.1`} muted playsInline preload="metadata" aria-hidden="true" />
               ) : (
-                <ProgressBar value={record.progress} label={`${record.file.name} progress`} isLabelHidden variant={record.status === "failed" ? "error" : "accent"} />
+                <img src={record.objectUrl} alt="" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.hidden = true; }} />
+              ))}
+              {record.status === "uploading" || record.status === "queued" ? (
+                <span className="media-tile__progress" aria-hidden="true"><span style={{transform: `scaleX(${record.progress / 100})`}} /></span>
+              ) : null}
+              {record.status === "uploaded" && (
+                <span className="media-tile__flags" aria-hidden="true">
+                  <span className={record.evidence?.hasGps ? "flag is-on" : "flag"}>GPS</span>
+                  {!record.evidence?.capturedAt && <span className="flag">no time</span>}
+                </span>
               )}
-            </Stack>
-            <Stack direction="horizontal" gap={1} vAlign="center">
-              {record.status === "failed" && <Button isDisabled={isDisabled} label="Retry" variant="secondary" size="sm" onClick={() => onRetry(record)} />}
-              <Button isDisabled={isDisabled} label={`Remove ${record.file.name}`} icon={<Text aria-hidden="true">×</Text>} isIconOnly variant="ghost" size="sm" onClick={() => onDiscard(record)} />
-            </Stack>
-          </Stack>
-        ))}
-      </Stack>
-    </Stack>
+              <span className="visually-hidden">{record.file.name}: {statusLabel(record)}</span>
+              {record.status === "failed" && (
+                <button type="button" className="media-tile__retry" disabled={isDisabled} onClick={() => onRetry(record)} aria-label={`Retry ${record.file.name}`}>retry</button>
+              )}
+              <button type="button" className="media-tile__remove" disabled={isDisabled} onClick={() => onDiscard(record)} aria-label={`Remove ${record.file.name}`}>×</button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

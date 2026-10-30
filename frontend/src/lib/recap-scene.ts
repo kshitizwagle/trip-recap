@@ -79,6 +79,10 @@ export function createSceneMap(container: HTMLElement, options: SceneMapOptions)
   map.on("error", (event: {sourceId?: string}) => {
     if (!event.sourceId) useFallback();
   });
+  // The OpenFreeMap styles name a few point-of-interest icons their sprites lack; they draw as nothing.
+  map.on("styleimagemissing", ({id}: {id: string}) => {
+    if (!map.hasImage(id)) map.addImage(id, {width: 1, height: 1, data: new Uint8Array(4)});
+  });
   setTimeout(useFallback, 8000);
   return {map, attribution: () => (usingFallback ? (spec.fallback.sources.base as {attribution?: string}).attribution ?? spec.attribution : spec.attribution)};
 }
@@ -164,11 +168,37 @@ function formatKm(meters: number): string {
   return meters >= 10_000 ? `${Math.round(meters / 1000)} km` : meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
 }
 
+/** Distances along a line in Web Mercator units, the space MapLibre measures `line-progress` in. */
+function mercatorCumulative(coords: LngLat[]): number[] {
+  const project = ([lng, lat]: LngLat): [number, number] => {
+    const clamped = Math.max(-85.0511, Math.min(85.0511, lat)) * (Math.PI / 180);
+    return [lng / 360, Math.log(Math.tan(Math.PI / 4 + clamped / 2)) / (2 * Math.PI)];
+  };
+  const out = [0];
+  for (let i = 1; i < coords.length; i += 1) {
+    const [ax, ay] = project(coords[i - 1]);
+    const [bx, by] = project(coords[i]);
+    out.push(out[i - 1] + Math.hypot(bx - ax, by - ay));
+  }
+  return out;
+}
+
+export interface HudText {
+  title: string;
+  subtitle: string;
+  km: string;
+  line1: string;
+  line2: string;
+  moving: boolean;
+}
+
 export class RecapScene {
-  readonly data: TripData;
+  /** Route, timeline and observation order are fixed for a scene; only stop names may change. */
+  data: TripData;
   readonly timeline: Timeline | null;
   readonly coords: LngLat[];
   private readonly cumulative: number[] = [0];
+  private readonly mercator: number[];
   readonly total: number;
   readonly routeMeters: number;
   private camera: Camera | null = null;
@@ -183,6 +213,56 @@ export class RecapScene {
     for (let i = 1; i < this.coords.length; i += 1) this.cumulative.push(this.cumulative[i - 1] + haversine(this.coords[i - 1], this.coords[i]));
     this.total = this.cumulative[this.cumulative.length - 1] ?? 0;
     this.routeMeters = data.summary.distance_meters || this.total;
+    this.mercator = mercatorCumulative(this.coords);
+  }
+
+  /** Takes new stop names (lookups and renames) without touching the route or timeline. */
+  setLabels(data: TripData) {
+    this.data = data;
+  }
+
+  /** Share of the drawn line covered at this distance progress, as MapLibre's `line-progress`. */
+  lineProgress(progress: number): number {
+    if (this.coords.length < 2 || progress <= 0) return 0;
+    if (progress >= 1) return 1;
+    const {index} = this.position(progress);
+    const span = this.cumulative[index] - this.cumulative[index - 1] || 1;
+    const t = Math.max(0, Math.min(1, (progress * this.total - this.cumulative[index - 1]) / span));
+    const at = this.mercator[index - 1] + (this.mercator[index] - this.mercator[index - 1]) * t;
+    return at / (this.mercator[this.mercator.length - 1] || 1);
+  }
+
+  /** The pill text for a stop: its place name, else its first file. */
+  stopLabel(index: number): string {
+    const observation = this.data.observations[index];
+    if (!observation) return "";
+    const name = observation.place && observation.place !== "Unknown place" ? observation.place : observation.media_files[0] ?? "Endpoint";
+    return name.length > 28 ? `${name.slice(0, 27)}…` : name;
+  }
+
+  /** Every word the HUD shows at a moment, for the canvas export and the DOM preview alike. */
+  hudText(state: PlaybackState): HudText {
+    const {title, subtitle} = this.title();
+    const observations = this.data.observations;
+    const name = (index: number | null) => {
+      const item = index === null ? undefined : observations[index];
+      if (!item) return "";
+      return item.place && item.place !== "Unknown place" ? item.place : `Point ${String(item.order).padStart(2, "0")}`;
+    };
+    let line1: string;
+    let line2: string;
+    if (state.phase === "move" && state.toIndex !== null) {
+      line1 = `${name(state.atIndex)} → ${name(state.toIndex)}`;
+      line2 = `leg ${state.toIndex} of ${Math.max(observations.length - 1, 1)}`;
+    } else if (state.phase === "outro") {
+      line1 = `${observations.length} points · ${formatKm(this.routeMeters)}`;
+      line2 = "the whole route";
+    } else {
+      line1 = name(state.atIndex) || "Starting point";
+      const media = observations[state.atIndex]?.media_files.length ?? 0;
+      line2 = state.phase === "intro" ? "start" : `stop ${state.atIndex + 1} of ${observations.length}${media ? ` · ${media} memor${media === 1 ? "y" : "ies"}` : ""}`;
+    }
+    return {title, subtitle, km: formatKm(state.progress * this.routeMeters), line1, line2, moving: state.phase === "move"};
   }
 
   get duration(): number {
@@ -396,8 +476,7 @@ export class RecapScene {
       const p = project([observation.longitude, observation.latitude]);
       if (p.x < -50 || p.y < -50 || p.x > width + 50 || p.y > height + 50) continue;
       const number = String(observation.order).padStart(2, "0");
-      const name = observation.place && observation.place !== "Unknown place" ? observation.place : observation.media_files[0] ?? "Endpoint";
-      const label = name.length > 28 ? `${name.slice(0, 27)}…` : name;
+      const label = this.stopLabel(index);
       ctx.font = `600 ${font}px ${FONT_MONO}`;
       const numberWidth = ctx.measureText(number).width;
       ctx.font = `500 ${font}px ${FONT_MONO}`;
@@ -518,7 +597,7 @@ export class RecapScene {
       ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
       ctx.shadowBlur = 10 * unit;
     };
-    const {title, subtitle} = this.title();
+    const {title, subtitle, km, line1, line2, moving} = this.hudText(state);
     ctx.save();
     shadow();
     ctx.textBaseline = "alphabetic";
@@ -533,7 +612,6 @@ export class RecapScene {
     ctx.font = `500 ${11 * unit}px ${FONT_MONO}`;
     ctx.fillText(subtitle, pad, pad + 56 * unit);
 
-    const km = formatKm(state.progress * this.routeMeters);
     ctx.textAlign = "right";
     ctx.fillStyle = AURA.fg;
     ctx.font = `600 ${24 * unit}px ${FONT_MONO}`;
@@ -544,25 +622,6 @@ export class RecapScene {
     ctx.restore();
 
     // Current leg card.
-    const observations = this.data.observations;
-    const name = (index: number | null) => {
-      const item = index === null ? undefined : observations[index];
-      if (!item) return "";
-      return item.place && item.place !== "Unknown place" ? item.place : `Point ${String(item.order).padStart(2, "0")}`;
-    };
-    let line1: string;
-    let line2: string;
-    if (state.phase === "move" && state.toIndex !== null) {
-      line1 = `${name(state.atIndex)} → ${name(state.toIndex)}`;
-      line2 = `leg ${state.toIndex} of ${Math.max(observations.length - 1, 1)}`;
-    } else if (state.phase === "outro") {
-      line1 = `${observations.length} points · ${formatKm(this.routeMeters)}`;
-      line2 = "the whole route";
-    } else {
-      line1 = name(state.atIndex) || "Starting point";
-      const media = observations[state.atIndex]?.media_files.length ?? 0;
-      line2 = state.phase === "intro" ? "start" : `stop ${state.atIndex + 1} of ${observations.length}${media ? ` · ${media} memor${media === 1 ? "y" : "ies"}` : ""}`;
-    }
     const big = 17 * unit;
     const small = 11 * unit;
     ctx.save();
@@ -583,7 +642,7 @@ export class RecapScene {
     ctx.lineWidth = 1 * unit;
     ctx.strokeStyle = "rgba(46, 44, 58, 1)";
     ctx.stroke();
-    ctx.fillStyle = state.phase === "move" ? AURA.green : AURA.accent;
+    ctx.fillStyle = moving ? AURA.green : AURA.accent;
     ctx.fillRect(x, y + 10 * unit, 3 * unit, boxH - 20 * unit);
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";

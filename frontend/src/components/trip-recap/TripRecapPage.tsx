@@ -583,6 +583,40 @@ export default function TripRecapPage() {
               </details>
             </aside>
           </div>
+        ) : records.length > 0 ? (
+          <section className="setup" aria-label="Your trip media">
+            <div className="setup-main">
+              <FileInput
+                className="setup-drop"
+                isDisabled={busy}
+                label="Add more photos and videos"
+                isLabelHidden
+                value={null}
+                onChange={handleFiles}
+                isMultiple
+                mode="dropzone"
+                placeholder="Drop more photos and videos, or choose files"
+              />
+              <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
+            </div>
+            <aside className="setup-side" aria-label="Route options">
+              <div className="setup-side__body">
+                <h2 className="panel-title">Build the route</h2>
+                <p className="note">
+                  {readyToAnalyze
+                    ? `${retainedRecords.length - missingGps} of ${retainedRecords.length} files have a location. Capture times set the order.`
+                    : "Reading capture times and locations. Nothing leaves this device."}
+                </p>
+                {largeUploadNote}
+                {gpsNote}
+                {routeOptions}
+              </div>
+              <div className="setup-build">
+                {buildButton}
+                {status && <span id="status" className={`exp-status status-${statusTone}`} aria-live="polite">{status}</span>}
+              </div>
+            </aside>
+          </section>
         ) : (
           <section className="empty-stage" aria-label="Add media">
             <div className="empty-copy">
@@ -616,25 +650,11 @@ export default function TripRecapPage() {
                   <span>Photos stored in iCloud also need to download before they appear.</span>
                 </div>
               )}
-              {records.length > 0 && (
-                <div className="empty-setup">
-                  <MediaQueue records={records} onDiscard={discardRecord} onRetry={retryRecord} isDisabled={busy} />
-                  {largeUploadNote}
-                  {gpsNote}
-                  {routeOptions}
-                  <div className="controls">
-                    {buildButton}
-                    {status && <span id="status" className={`exp-status status-${statusTone}`} aria-live="polite">{status}</span>}
-                  </div>
-                </div>
-              )}
-              {records.length === 0 && (
-                <div className="empty-setup">
-                  <p className="empty-divider" aria-hidden="true">or</p>
-                  <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} />
-                  {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
-                </div>
-              )}
+              <div className="empty-setup">
+                <p className="empty-divider" aria-hidden="true">or</p>
+                <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} />
+                {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
+              </div>
             </div>
           </section>
         )}
