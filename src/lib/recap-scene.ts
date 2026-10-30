@@ -5,7 +5,7 @@
 // timeline through playbackStateAt, so what you preview is what you export.
 
 import maplibregl from "maplibre-gl";
-import {playbackStateAt, type PlaybackState} from "./engine/timeline.ts";
+import {OUTRO_SECONDS, playbackStateAt, type PlaybackState} from "./engine/timeline.ts";
 import type {Timeline} from "./engine/models.ts";
 import type {TripData} from "./trip-types";
 
@@ -129,6 +129,31 @@ interface Camera {
   zoom: number;
 }
 
+/** Seconds of the outro spent pulling back; the rest holds on the whole route. */
+const OUTRO_ZOOM_SECONDS = 1.8;
+
+/**
+ * Camera `t` (0..1) of the way from `from` to `to`, zooming about the one point that keeps its place
+ * on screen, so the view opens out around where the trip ended instead of sliding across the map.
+ */
+function zoomPath(from: Camera, to: Camera, t: number): Camera {
+  const a = maplibregl.MercatorCoordinate.fromLngLat([from.lng, from.lat]);
+  const b = maplibregl.MercatorCoordinate.fromLngLat([to.lng, to.lat]);
+  const zoom = from.zoom + (to.zoom - from.zoom) * t;
+  const r = 2 ** (from.zoom - to.zoom);
+  let x = a.x + (b.x - a.x) * t;
+  let y = a.y + (b.y - a.y) * t;
+  if (Math.abs(1 - r) > 0.05) {
+    const fx = (b.x - a.x * r) / (1 - r);
+    const fy = (b.y - a.y * r) / (1 - r);
+    const s = 2 ** (from.zoom - zoom);
+    x = fx - (fx - a.x) * s;
+    y = fy - (fy - a.y) * s;
+  }
+  const center = new maplibregl.MercatorCoordinate(x, y).toLngLat();
+  return {lng: center.lng, lat: center.lat, zoom};
+}
+
 export interface DrawOptions {
   /** Canvas size in device pixels. */
   width: number;
@@ -169,20 +194,6 @@ function formatKm(meters: number): string {
 }
 
 /** Distances along a line in Web Mercator units, the space MapLibre measures `line-progress` in. */
-function mercatorCumulative(coords: LngLat[]): number[] {
-  const project = ([lng, lat]: LngLat): [number, number] => {
-    const clamped = Math.max(-85.0511, Math.min(85.0511, lat)) * (Math.PI / 180);
-    return [lng / 360, Math.log(Math.tan(Math.PI / 4 + clamped / 2)) / (2 * Math.PI)];
-  };
-  const out = [0];
-  for (let i = 1; i < coords.length; i += 1) {
-    const [ax, ay] = project(coords[i - 1]);
-    const [bx, by] = project(coords[i]);
-    out.push(out[i - 1] + Math.hypot(bx - ax, by - ay));
-  }
-  return out;
-}
-
 export interface HudText {
   title: string;
   subtitle: string;
@@ -198,10 +209,11 @@ export class RecapScene {
   readonly timeline: Timeline | null;
   readonly coords: LngLat[];
   private readonly cumulative: number[] = [0];
-  private readonly mercator: number[];
   readonly total: number;
   readonly routeMeters: number;
   private camera: Camera | null = null;
+  /** Where the camera was when the pull-back to the whole route began. */
+  private outroFrom: Camera | null = null;
 
   constructor(data: TripData) {
     this.data = data;
@@ -213,23 +225,11 @@ export class RecapScene {
     for (let i = 1; i < this.coords.length; i += 1) this.cumulative.push(this.cumulative[i - 1] + haversine(this.coords[i - 1], this.coords[i]));
     this.total = this.cumulative[this.cumulative.length - 1] ?? 0;
     this.routeMeters = data.summary.distance_meters || this.total;
-    this.mercator = mercatorCumulative(this.coords);
   }
 
   /** Takes new stop names (lookups and renames) without touching the route or timeline. */
   setLabels(data: TripData) {
     this.data = data;
-  }
-
-  /** Share of the drawn line covered at this distance progress, as MapLibre's `line-progress`. */
-  lineProgress(progress: number): number {
-    if (this.coords.length < 2 || progress <= 0) return 0;
-    if (progress >= 1) return 1;
-    const {index} = this.position(progress);
-    const span = this.cumulative[index] - this.cumulative[index - 1] || 1;
-    const t = Math.max(0, Math.min(1, (progress * this.total - this.cumulative[index - 1]) / span));
-    const at = this.mercator[index - 1] + (this.mercator[index] - this.mercator[index - 1]) * t;
-    return at / (this.mercator[this.mercator.length - 1] || 1);
   }
 
   /**
@@ -375,13 +375,21 @@ export class RecapScene {
 
   resetCamera() {
     this.camera = null;
+    this.outroFrom = null;
   }
 
   /** Eases the map camera toward the target for this time. `dt` in seconds. */
   updateCamera(map: maplibregl.Map, time: number, dt: number) {
     const target = this.cameraTarget(map, time);
     if (!target) return;
-    if (!this.camera) {
+    const outro = this.coords.length >= 2 && this.state(time).phase === "outro";
+    if (!outro) this.outroFrom = null;
+    if (outro) {
+      // A timed pull-back that always lands on the whole route, instead of easing after it.
+      this.outroFrom ??= {...(this.camera ?? target)};
+      const t = Math.max(0, Math.min(1, (time - (this.duration - OUTRO_SECONDS)) / OUTRO_ZOOM_SECONDS));
+      this.camera = zoomPath(this.outroFrom, target, t * t * (3 - 2 * t));
+    } else if (!this.camera) {
       this.camera = {...target};
     } else {
       const k = 1 - Math.exp(-dt * 2.2);

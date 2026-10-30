@@ -10,6 +10,9 @@ export const FALLBACK_SPEED_KPH = 40;
 /** How long the overview shows before the traveller sets off. */
 export const INTRO_SECONDS = 0.8;
 
+/** Time after the last arrival: the camera pulls back to the whole route, then holds on it. */
+export const OUTRO_SECONDS = 3;
+
 /** Real travel time → video seconds. Tuned so a short hop takes ~1.5 s and a long drive ~10 s. */
 const ANCHORS: Array<[number, number]> = [
   [120, 1.5],
@@ -88,9 +91,9 @@ export class TimelineBuilder {
     }
 
     events.push({video_time: cursor, type: "camera_overview", payload: {}});
-    events.push({video_time: cursor + 1.5, type: "route_end", payload: {}});
+    events.push({video_time: cursor + OUTRO_SECONDS, type: "route_end", payload: {}});
     events.sort((a, b) => a.video_time - b.video_time);
-    const duration = cursor + 1.5;
+    const duration = cursor + OUTRO_SECONDS;
     trip.stats.video_duration_seconds = duration;
     return {duration_seconds: duration, events};
   }

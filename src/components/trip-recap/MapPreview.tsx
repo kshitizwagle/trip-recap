@@ -25,8 +25,6 @@ export interface MapPreviewProps {
 type LngLat = [number, number];
 
 const GREEN = "#61ffca";
-const NO_GREEN = "rgba(97, 255, 202, 0)";
-const TRAIL_LAYERS = ["trip-trail", "trip-glow", "trip-glow-wide"] as const;
 const PILL_SIDES = ["right", "left", "top", "bottom"] as const;
 /** How often stop labels re-pick their sides while the camera follows. */
 const PILL_LAYOUT_MS = 200;
@@ -36,10 +34,14 @@ function formatClock(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
-/** Green up to the given share of the line, nothing after it. */
-function travelled(progress: number): maplibregl.ExpressionSpecification {
-  if (progress >= 1) return ["interpolate", ["linear"], ["line-progress"], 0, GREEN, 1, GREEN];
-  return ["step", ["line-progress"], GREEN, Math.max(progress, 1e-6), NO_GREEN];
+/**
+ * The road driven so far, as its own line. MapLibre's `line-gradient` drops the colour on some tiles
+ * of a long route, so the trail is not drawn as a gradient over the whole road.
+ */
+function travelledData(scene: RecapScene, progress: number): GeoJSON.Feature | GeoJSON.FeatureCollection {
+  if (scene.coords.length < 2 || progress <= 0) return {type: "FeatureCollection", features: []};
+  const head = scene.position(progress);
+  return {type: "Feature", properties: {}, geometry: {type: "LineString", coordinates: [...scene.coords.slice(0, head.index), head.point]}};
 }
 
 /** Compass bearing from a to b, in degrees clockwise from north. */
@@ -76,12 +78,13 @@ function addRouteLayers(map: maplibregl.Map, scene: RecapScene) {
   map.addSource("trip-spots", {type: "geojson", data: spotData(scene)});
   map.addLayer({id: "trip-spot-tether", type: "line", source: "trip-spots", filter: ["==", ["geometry-type"], "LineString"], paint: {"line-color": "#edecee", "line-opacity": 0.4, "line-width": 1.2, "line-dasharray": [2, 2]}});
   map.addLayer({id: "trip-spot", type: "circle", source: "trip-spots", filter: ["==", ["geometry-type"], "Point"], paint: {"circle-radius": 3, "circle-color": "rgba(0, 0, 0, 0)", "circle-stroke-color": "#edecee", "circle-stroke-opacity": 0.5, "circle-stroke-width": 1.2}});
-  map.addSource("trip-route", {type: "geojson", lineMetrics: true, data: lineData(scene)});
+  map.addSource("trip-route", {type: "geojson", data: lineData(scene)});
+  map.addSource("trip-travelled", {type: "geojson", data: travelledData(scene, 0)});
   const round = {"line-join": "round", "line-cap": "round"} as const;
   map.addLayer({id: "trip-road", type: "line", source: "trip-route", layout: {"line-join": "round"}, paint: {"line-width": 2.6}});
-  map.addLayer({id: "trip-glow-wide", type: "line", source: "trip-route", layout: round, paint: {"line-width": 14, "line-opacity": 0.1, "line-blur": 4, "line-gradient": travelled(0)}});
-  map.addLayer({id: "trip-glow", type: "line", source: "trip-route", layout: round, paint: {"line-width": 7, "line-opacity": 0.2, "line-blur": 2, "line-gradient": travelled(0)}});
-  map.addLayer({id: "trip-trail", type: "line", source: "trip-route", layout: round, paint: {"line-width": 3.6, "line-gradient": travelled(0)}});
+  map.addLayer({id: "trip-glow-wide", type: "line", source: "trip-travelled", layout: round, paint: {"line-width": 14, "line-opacity": 0.1, "line-blur": 4, "line-color": GREEN}});
+  map.addLayer({id: "trip-glow", type: "line", source: "trip-travelled", layout: round, paint: {"line-width": 7, "line-opacity": 0.2, "line-blur": 2, "line-color": GREEN}});
+  map.addLayer({id: "trip-trail", type: "line", source: "trip-travelled", layout: round, paint: {"line-width": 3.6, "line-color": GREEN}});
   roadPaint(map, scene);
 }
 
@@ -398,6 +401,8 @@ const MapPreview = forwardRef(function MapPreview(
     let last = performance.now();
     let lastUiUpdate = 0;
     let shownTrail = -1;
+    let trailSource: maplibregl.GeoJSONSource | undefined;
+    let trailScene: RecapScene | null = null;
     let shownStops = "";
     let shownHud = "";
 
@@ -425,10 +430,14 @@ const MapPreview = forwardRef(function MapPreview(
       dirtyRef.current = false;
 
       const state = scene.state(timeRef.current);
-      const trail = Math.round(scene.lineProgress(state.progress) * 20_000) / 20_000;
-      if (trail !== shownTrail && map.getLayer("trip-trail")) {
+      const trail = Math.round(state.progress * 20_000) / 20_000;
+      const source = map.getSource("trip-travelled") as maplibregl.GeoJSONSource | undefined;
+      // A style switch or a new route brings a new source or scene, which needs the trail again.
+      if (source && (trail !== shownTrail || source !== trailSource || scene !== trailScene)) {
         shownTrail = trail;
-        for (const layer of TRAIL_LAYERS) map.setPaintProperty(layer, "line-gradient", travelled(trail));
+        trailSource = source;
+        trailScene = scene;
+        source.setData(travelledData(scene, trail));
       }
 
       const head = headRef.current;

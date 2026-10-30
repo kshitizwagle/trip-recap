@@ -46,12 +46,15 @@ export function exportDimensions(frame: FrameId, quality: ExportQuality): [numbe
 
 async function pickEncoderConfig(width: number, height: number, fps: number): Promise<VideoEncoderConfig> {
   const bitrate = Math.round(width * height * fps * 0.09);
-  for (const codec of ["avc1.640034", "avc1.640033", "avc1.640028", "avc1.4d0028", "avc1.42e028"]) {
-    const config: VideoEncoderConfig = {codec, width, height, bitrate, framerate: fps, avc: {format: "avc"}};
-    try {
-      if ((await VideoEncoder.isConfigSupported(config)).supported) return config;
-    } catch {
-      // try the next profile
+  // Ask for a hardware encoder at any profile first; fall back to whatever the browser offers.
+  for (const hardwareAcceleration of ["prefer-hardware", "no-preference"] as const) {
+    for (const codec of ["avc1.640034", "avc1.640033", "avc1.640028", "avc1.4d0028", "avc1.42e028"]) {
+      const config: VideoEncoderConfig = {codec, width, height, bitrate, framerate: fps, hardwareAcceleration, avc: {format: "avc"}};
+      try {
+        if ((await VideoEncoder.isConfigSupported(config)).supported) return config;
+      } catch {
+        // try the next profile
+      }
     }
   }
   throw new Error(`This browser cannot encode H.264 at ${width}×${height}. Try a lower quality, or a recent Chrome, Edge or Safari.`);
