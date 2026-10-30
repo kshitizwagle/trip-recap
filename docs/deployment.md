@@ -8,25 +8,24 @@ The repository is set up for Cloudflare Workers Builds:
 
 | Setting | Value |
 | --- | --- |
-| Root directory | `frontend` |
+| Root directory | `/` (repository root) |
 | Build command | `npm run build` |
 | Deploy command | `npx wrangler deploy --assets=./out` |
 | Node version | `22` (22.18 or newer) |
 | Environment variables | none |
 
-`frontend/wrangler.toml` serves `out/` as static assets, so `/` (the studio) and `/recap`
+`wrangler.toml` serves `out/` as static assets, so `/` (the studio) and `/recap`
 (the same page, kept for older links) resolve to their HTML files.
 
 To deploy from a machine instead:
 
 ```sh
-cd frontend
 npm ci --ignore-scripts
 npm run build
 npx wrangler deploy --assets=./out
 ```
 
-Cloudflare Pages or any other static host also works: publish the contents of `frontend/out`.
+Cloudflare Pages or any other static host also works: publish the contents of `out/`.
 Do not add `pages_build_output_dir` to `wrangler.toml` while deploying with `wrangler deploy`;
 it makes Wrangler treat the project as Pages and stop.
 
@@ -43,17 +42,11 @@ The browser calls these public services directly. None needs a key.
 
 The public OSRM demo and Nominatim have usage policies meant for light use. If the site gets
 real traffic, run your own OSRM or Nominatim and change the `baseUrl` defaults in
-`frontend/src/lib/engine/routing.ts` and `frontend/src/lib/engine/places.ts`.
-
-## Legacy backend
-
-`backend/` and `compose.yaml` are the earlier FastAPI service. The frontend does not use them;
-they are kept for reference and still have their own tests.
+`src/lib/engine/routing.ts` and `src/lib/engine/places.ts`.
 
 ## Verification
 
 ```sh
-cd frontend
 npm test
 npm run typecheck
 npm run build

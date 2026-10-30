@@ -1,3 +1,0 @@
-libimage-exiftool-perl
-ffmpeg
-chromium

@@ -5,28 +5,8 @@ on:
   pull_request:
 
 jobs:
-  legacy-backend:
+  app:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    env:
-      PYTHONPATH: ${{ github.workspace }}/backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-      - run: uv python install 3.12
-      - run: uv sync --extra dev
-      - run: uv run python -c "import app; print(app.__file__)"
-      - run: uv run pytest -q
-
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

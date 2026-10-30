@@ -27,9 +27,9 @@ Do not add AI, image recognition, automatic music selection, place-name generati
 ## Architecture
 
 Trip Recap is frontend-only: a static Next.js export with no server. Media is processed in the
-browser and never uploaded. Keep domain boundaries separate under `frontend/src/lib/engine/`:
+browser and never uploaded. Keep domain boundaries separate under `src/lib/engine/`:
 
-- `models.ts`: shared domain types (same JSON shapes the old backend produced)
+- `models.ts`: shared domain types
 - `metadata/`: EXIF/QuickTime extraction and normalization
 - `trip.ts`: validation, observations, segmentation, trip construction
 - `routing.ts`: routing abstraction, OSRM, caching, observation progress
@@ -38,13 +38,10 @@ browser and never uploaded. Keep domain boundaries separate under `frontend/src/
 - `analyze.ts`: orchestration that turns media into trip payloads
 - `mp4.ts`: MP4 container writing
 
-`frontend/src/lib/trip-api.ts` is the only module the UI calls; it wires the engine to browser
-APIs. `frontend/src/lib/recap-export.ts` owns video rendering. Engine modules stay free of DOM
+`src/lib/trip-api.ts` is the only module the UI calls; it wires the engine to browser
+APIs. `src/lib/recap-export.ts` owns video rendering. Engine modules stay free of DOM
 and React so they run under `node --test`. Do not add a server, serverless function or required
 API key unless the milestone plan is explicitly changed.
-
-`backend/` is the earlier FastAPI implementation, kept for reference only. Do not add features
-there; the Python rules below apply only if it is edited.
 
 ## TypeScript rules
 
@@ -52,17 +49,6 @@ there; the Python rules below apply only if it is edited.
 - Avoid TypeScript-only runtime syntax (parameter properties, enums, namespaces) in engine modules.
 - Inject `fetch`, clocks and sleeps into network clients so tests stay deterministic.
 - Keep caches of GPS-derived data in memory only.
-
-## Python rules (legacy backend)
-
-- Target Python 3.12+ unless hosting constraints require otherwise.
-- Use type hints on public functions and models.
-- Prefer Pydantic models for serialized domain data.
-- Prefer `pathlib.Path` over string path manipulation.
-- Prefer `httpx` for HTTP clients.
-- Keep I/O async where it provides real benefit.
-- Do not hide blocking subprocess calls inside async code. Use a thread/process boundary when needed.
-- Avoid global mutable application state.
 
 ## Metadata rules
 
@@ -235,3 +221,13 @@ gives you structural context (callers, dependents, test coverage) that file sear
 3. Use `get_affected_flows_tool` to understand impact.
 4. Use `query_graph_tool` pattern="tests_for" to check coverage.
 <!-- /code-review-graph MCP tools -->
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -1,7 +1,3 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
 .env
 .DS_Store
 trip.json

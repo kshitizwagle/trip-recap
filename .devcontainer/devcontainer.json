@@ -1,33 +1,20 @@
 {
-  "name": "Python 3",
-  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "name": "Trip Recap",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
   "customizations": {
     "codespaces": {
-      "openFiles": [
-        "README.md",
-        "backend/main.py"
-      ]
-    },
-    "vscode": {
-      "settings": {},
-      "extensions": [
-        "ms-python.python",
-        "ms-python.vscode-pylance"
-      ]
+      "openFiles": ["README.md"]
     }
   },
-  "updateContentCommand": "pip install -r backend/requirements.txt",
+  "updateContentCommand": "npm ci --ignore-scripts",
   "postAttachCommand": {
-    "server": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 58001"
+    "server": "npm run dev"
   },
   "portsAttributes": {
-    "58001": {
-      "label": "Backend API",
+    "3000": {
+      "label": "Trip Recap",
       "onAutoForward": "openPreview"
     }
   },
-  "forwardPorts": [
-    58001
-  ]
+  "forwardPorts": [3000]
 }

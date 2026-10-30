@@ -16,7 +16,7 @@ keep their own licenses and terms.
 | [Sonner](https://github.com/emilkowalski/sonner) | MIT | Emil Kowalski |
 
 These packages pull in further dependencies of their own; each one's license file ships in its
-folder under `frontend/node_modules`. The full texts of the licenses above follow at the end of
+folder under `node_modules`. The full texts of the licenses above follow at the end of
 this file.
 
 ## Design
@@ -40,10 +40,6 @@ apply to anyone running or hosting Trip Recap:
 - Place names and search from [Nominatim](https://nominatim.org/), under the
   [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/), and
   [Photon](https://photon.komoot.io/) as a fallback.
-
-The legacy `backend/` folder depends on Python packages (FastAPI, Pydantic, HTTPX, Shapely,
-Playwright, Pillow, pillow-heif and others) that are installed separately and keep their own
-licenses.
 
 ---
 

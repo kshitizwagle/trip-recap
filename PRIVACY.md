@@ -17,5 +17,5 @@ Trip Recap reads media metadata that may contain precise GPS coordinates and cap
 ## Self-hosting
 
 To keep coordinates away from third-party services, run your own OSRM and Nominatim and point
-the `baseUrl` options in `frontend/src/lib/engine/routing.ts` and `frontend/src/lib/engine/places.ts`
+the `baseUrl` options in `src/lib/engine/routing.ts` and `src/lib/engine/places.ts`
 at them.
