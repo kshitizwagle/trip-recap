@@ -5,5 +5,5 @@ import type {ReactNode} from "react";
 import {tripRecapTheme} from "@/theme";
 
 export default function TripTheme({children}: {children: ReactNode}) {
-  return <Theme theme={tripRecapTheme} mode="dark">{children}</Theme>;
+  return <Theme theme={tripRecapTheme} mode="system">{children}</Theme>;
 }

@@ -62,6 +62,22 @@ function formatSpan(start: string | null, end: string | null): string {
   return `${Math.round(hours / 24)} days`;
 }
 
+const REPO_URL = "https://github.com/kshitizwagle/trip-recap";
+
+// What each outside service receives, shown on the landing page; PRIVACY.md is the full statement.
+const DATA_FLOWS = [
+  {service: "Your photos and videos", receives: "Nothing. They are never uploaded.", purpose: "Read locally in this tab", isLocal: true},
+  {service: "OSRM", receives: "Stop coordinates", purpose: "Inferring roads between stops"},
+  {service: "Nominatim", receives: "Stop coordinates, search text", purpose: "Place names and endpoint search"},
+  {service: "OpenFreeMap, EOX", receives: "Map tile requests", purpose: "Drawing the base map"},
+] as const;
+
+const STEPS = [
+  {tag: "01 · Read", title: "Metadata, not guesses", body: "Capture times come from DateTimeOriginal or MediaCreateDate. Files without GPS or a time are flagged, never filled in."},
+  {tag: "02 · Trace", title: "Roads between stops", body: "Nearby shots cluster into stops. OSRM infers the driving route between them, kept apart from recorded GPS."},
+  {tag: "03 · Export", title: "MP4 in the browser", body: "Frames render with MapLibre and encode to H.264 with WebCodecs. 1080 × 1920 at 30 fps by default, cancellable at any point."},
+] as const;
+
 const PLACE_DETAIL_LABELS: Record<PlaceDetail, string> = {specific: "Exact", neighborhood: "Area", city: "Town", region: "Region"};
 const SHORT_FRAME: Record<FrameId, string> = {portrait: "9:16", landscape: "16:9", square: "1:1"};
 
@@ -505,14 +521,23 @@ export default function TripRecapPage() {
       : `${exportDimensions(frame, quality).join("×")} · ${exportLength} s at ${playbackSpeed === 0.5 ? "½" : playbackSpeed}× · MP4`;
 
   return (
-    <Theme theme={tripRecapTheme} mode="dark">
+    <Theme theme={tripRecapTheme} mode="system">
       <div className="studio">
-        <header className="studio-head">
-          <img className="studio-mark" src="/icon.svg" alt="" aria-hidden="true" width={34} height={34} />
-          <div className="studio-title">
+        <header className={trip ? "studio-head is-working" : "studio-head"}>
+          <a className="studio-brand" href="/">
+            <img className="studio-mark" src="/icon.svg" alt="" aria-hidden="true" width={28} height={28} />
             <h1>Trip Recap</h1>
-            <p>{summary}</p>
-          </div>
+          </a>
+          <p className="studio-summary">{summary}</p>
+          <nav className="studio-nav" aria-label="Project">
+            <a href={`${REPO_URL}#readme`}>Docs</a>
+            <a href={`${REPO_URL}/blob/main/PRIVACY.md`}>Privacy</a>
+            <a href={`${REPO_URL}/blob/main/docs/deployment.md`}>Self-host</a>
+            <a className="studio-nav__repo" href={REPO_URL}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" width={16} height={16}><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" /></svg>
+              GitHub
+            </a>
+          </nav>
           <div className="studio-actions">
             <label className={busy ? "btn is-disabled" : "btn"}>
               Add media
@@ -631,52 +656,101 @@ export default function TripRecapPage() {
             </aside>
           </section>
         ) : (
-          <section className="empty-stage" aria-label="Add media">
-            <div className="empty-copy">
-              <h2>Make a trip out of the camera roll.</h2>
-              <p>Drop the photos and videos from a trip. Their GPS and capture times draw the route, then it plays as a map you can export.</p>
-              <p className="note">Everything runs in this browser. Files never leave your device; only point coordinates go to the road router (OSRM) and place names (OpenStreetMap).</p>
-            </div>
-            <div className="empty-paths">
-              <div className="empty-drop">
-                <FileInput
-                  className="editor-upload-input"
-                  isDisabled={busy}
-                  label="Trip photos and videos"
-                  isLabelHidden
-                  value={null}
-                  onChange={handleFiles}
-                  isMultiple
-                  mode="dropzone"
-                  placeholder="Drop photos and videos, or choose files"
-                  description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
-                />
-              </div>
-              {isIOS && (
-                <div className="ios-tip" role="note">
-                  <strong>On iPhone, before tapping Add</strong>
-                  <span>In the photo picker, tap <b>Options</b> at the top and set:</span>
-                  <ul>
-                    <li><b>Location</b> on, so the route can be drawn.</li>
-                    <li><b>Format: Current</b>, so iPhone hands over the originals. On Automatic it converts every photo and video first, which can take minutes with no sign of progress after you tap Add.</li>
-                  </ul>
-                  <span>Photos stored in iCloud also need to download before they appear.</span>
+          <div className="landing">
+            <section className="empty-stage" aria-label="Add media">
+              <div className="empty-copy">
+                <p className="local-badge">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" width={16} height={16}><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                  Runs entirely in your browser. Files never leave this device.
+                </p>
+                <h2>Turn trip photos into a route map video.</h2>
+                <p>Trip Recap reads the GPS and capture times already inside your photos and videos, traces the roads between them, and exports a vertical MP4. Missing metadata stays visible, and inferred roads are kept apart from recorded points.</p>
+                <div className="empty-drop">
+                  <FileInput
+                    className="editor-upload-input"
+                    isDisabled={busy}
+                    label="Trip photos and videos"
+                    isLabelHidden
+                    value={null}
+                    onChange={handleFiles}
+                    isMultiple
+                    mode="dropzone"
+                    placeholder="Drop photos and videos, or choose files"
+                    description={`JPG, HEIC, PNG, WebP, MOV & MP4 · up to ${MAX_FILE_LABEL} each`}
+                  />
                 </div>
-              )}
-              <div className="empty-setup">
-                <section className="landing-ends" aria-label="Start and end">
-                  <p className="eyebrow">Start and end · optional</p>
-                  {routeOptions}
-                  <p className="note">Used for the route from your photos, and as the first and last stops of a route planned by hand.</p>
-                </section>
-                <p className="empty-divider" aria-hidden="true">or</p>
-                <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} endpointCount={plannedStops.length - plannedPlaces.length} />
-                {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
+                {isIOS && (
+                  <div className="ios-tip" role="note">
+                    <strong>On iPhone, before tapping Add</strong>
+                    <span>In the photo picker, tap <b>Options</b> at the top and set:</span>
+                    <ul>
+                      <li><b>Location</b> on, so the route can be drawn.</li>
+                      <li><b>Format: Current</b>, so iPhone hands over the originals. On Automatic it converts every photo and video first, which can take minutes with no sign of progress after you tap Add.</li>
+                    </ul>
+                    <span>Photos stored in iCloud also need to download before they appear.</span>
+                  </div>
+                )}
               </div>
-            </div>
-          </section>
+              <aside className="empty-setup" aria-label="Route options">
+                <section className="landing-ends" aria-label="Start and end">
+                  <h2 className="panel-title">Start and end</h2>
+                  <p className="note">Optional. Used for the route from your photos, and as the first and last stops of a route planned by hand.</p>
+                  {routeOptions}
+                </section>
+                <section className="landing-plan" aria-label="Plan from places">
+                  <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} endpointCount={plannedStops.length - plannedPlaces.length} />
+                  {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
+                </section>
+              </aside>
+            </section>
+  
+            <section className="landing-section" aria-labelledby="how-title">
+              <h2 id="how-title" className="section-label">How it works</h2>
+              <ol className="steps">
+                {STEPS.map((step) => (
+                  <li key={step.tag} className="card step">
+                    <span className="step__tag">{step.tag}</span>
+                    <h3>{step.title}</h3>
+                    <p>{step.body}</p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+  
+            <section className="landing-section" aria-labelledby="flows-title">
+              <h2 id="flows-title" className="section-label">What leaves your device</h2>
+              <div className="card table-scroll">
+                <table className="flows">
+                  <thead>
+                    <tr><th scope="col">Service</th><th scope="col">Receives</th><th scope="col">Used for</th></tr>
+                  </thead>
+                  <tbody>
+                    {DATA_FLOWS.map((flow) => (
+                      <tr key={flow.service}>
+                        <th scope="row">{flow.service}</th>
+                        <td className={"isLocal" in flow ? "status-success" : "flows__data"}>{flow.receives}</td>
+                        <td>{flow.purpose}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="note">The router and geocoder URLs are configurable for self-hosting. See <a href={`${REPO_URL}/blob/main/PRIVACY.md`}>PRIVACY.md</a>.</p>
+            </section>
+          </div>
         )}
-        <Toaster position="bottom-right" theme="dark" richColors closeButton />
+        {!trip && (
+          <footer className="studio-foot">
+            <span>Trip Recap is open source.</span>
+            <nav aria-label="Footer">
+              <a href={REPO_URL}>Source</a>
+              <a href={`${REPO_URL}/issues`}>Report an issue</a>
+              <a href={`${REPO_URL}/blob/main/PRIVACY.md`}>Privacy</a>
+              <a href="https://www.openstreetmap.org/copyright">Map data © OpenStreetMap contributors</a>
+            </nav>
+          </footer>
+        )}
+        <Toaster position="bottom-right" theme="system" richColors closeButton />
       </div>
     </Theme>
   );

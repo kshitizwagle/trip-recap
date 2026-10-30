@@ -38,10 +38,7 @@ export default function StopEditor({trip, busy, retracing = false, onReorder, on
 
   return (
     <Stack gap={3}>
-      <Stack direction="horizontal" hAlign="between" vAlign="center" gap={2}>
-        <Text className="eyebrow">{count} stop{count === 1 ? "" : "s"} · in route order</Text>
-        <Text type="supporting">{retracing ? "re-tracing the route…" : "drag to reorder · + to add between"}</Text>
-      </Stack>
+      <Text type="supporting">{retracing ? "Re-tracing the route…" : "In route order. Drag to reorder, or hover between two stops to add one."}</Text>
       {retracing && <span className="busy-bar" role="progressbar" aria-label="Re-tracing the route" />}
       <ReorderList
         className="editor-stops"
