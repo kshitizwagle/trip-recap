@@ -20,6 +20,8 @@ interface PlacePlannerProps {
   busy: boolean;
   onChange: (places: PlannedPlace[]) => void;
   onBuild: () => void;
+  /** Start and end points set elsewhere on the page; they count toward the two places a route needs. */
+  endpointCount?: number;
 }
 
 function shortName(displayName: string): string {
@@ -27,9 +29,10 @@ function shortName(displayName: string): string {
 }
 
 /** A route made from searched places, for trips without geotagged photos or videos. */
-export default function PlacePlanner({places, busy, onChange, onBuild}: PlacePlannerProps) {
+export default function PlacePlanner({places, busy, onChange, onBuild, endpointCount = 0}: PlacePlannerProps) {
   const [query, setQuery] = useState("");
   const count = places.length;
+  const needed = Math.max(0, 2 - count - endpointCount);
 
   const add = (place: Omit<PlannedPlace, "key">) => {
     onChange([...places, {...place, key: `${Date.now()}-${Math.random()}`}]);
@@ -112,10 +115,10 @@ export default function PlacePlanner({places, busy, onChange, onBuild}: PlacePla
           isDisabled={busy || query.trim().length < 2}
           onClick={() => add({label: shortName(query.trim()), stop: {query: query.trim()}})}
         />
-        <button type="button" className="btn primary" disabled={busy || count < 2} onClick={onBuild}>
+        <button type="button" className={busy ? "btn primary is-busy" : "btn primary"} disabled={busy || needed > 0} onClick={onBuild} aria-busy={busy}>
           {busy ? "Tracing route…" : "Build route from places"}
         </button>
-        {count < 2 && <Text type="supporting">{count === 0 ? "Add at least two places." : "Add one more place."}</Text>}
+        {needed > 0 && <Text type="supporting">{needed === 2 ? "Add at least two places." : "Add one more place."}</Text>}
       </Stack>
     </Stack>
   );

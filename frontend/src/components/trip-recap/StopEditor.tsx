@@ -10,6 +10,8 @@ import type {TripData} from "@/lib/trip-types";
 interface StopEditorProps {
   trip: TripData;
   busy: boolean;
+  /** True while the route is being traced again after an edit. */
+  retracing?: boolean;
   onReorder: (from: number, to: number) => void;
   onRemove: (index: number) => void;
   onRename: (observationId: string, name: string) => void;
@@ -23,7 +25,7 @@ function formatDate(value: string): string {
 }
 
 /** The route as an editable list: drag to reorder, rename, remove, and add a place between any two stops. */
-export default function StopEditor({trip, busy, onReorder, onRemove, onRename, onAdd}: StopEditorProps) {
+export default function StopEditor({trip, busy, retracing = false, onReorder, onRemove, onRename, onAdd}: StopEditorProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [insertAt, setInsertAt] = useState<number | null>(null);
@@ -38,8 +40,9 @@ export default function StopEditor({trip, busy, onReorder, onRemove, onRename, o
     <Stack gap={3}>
       <Stack direction="horizontal" hAlign="between" vAlign="center" gap={2}>
         <Text className="eyebrow">{count} stop{count === 1 ? "" : "s"} · in route order</Text>
-        <Text type="supporting">drag to reorder · + to add between</Text>
+        <Text type="supporting">{retracing ? "re-tracing the route…" : "drag to reorder · + to add between"}</Text>
       </Stack>
+      {retracing && <span className="busy-bar" role="progressbar" aria-label="Re-tracing the route" />}
       <ReorderList
         className="editor-stops"
         items={trip.observations}
@@ -86,7 +89,7 @@ export default function StopEditor({trip, busy, onReorder, onRemove, onRename, o
                 ) : (
                   <button
                     type="button"
-                    className="editor-stop-name"
+                    className={observation.place === "Looking up…" ? "editor-stop-name is-pending" : "editor-stop-name"}
                     title="Rename this stop"
                     disabled={busy}
                     onClick={() => {

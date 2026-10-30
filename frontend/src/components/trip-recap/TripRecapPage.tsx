@@ -272,13 +272,24 @@ export default function TripRecapPage() {
     }
   }, [endLocation, keepAsOneTrip, readyToAnalyze, retainedRecords, returnToStart, sessionId, startLocation]);
 
+  // A start and end set on the landing page bracket the planned places.
+  const plannedStops = useMemo(() => {
+    const start = startLocation.trim();
+    const end = endLocation.trim();
+    return [
+      ...(start ? [{query: start}] : []),
+      ...plannedPlaces.map((place) => place.stop),
+      ...(returnToStart ? (start ? [{query: start}] : []) : end ? [{query: end}] : []),
+    ];
+  }, [endLocation, plannedPlaces, returnToStart, startLocation]);
+
   const planRoute = useCallback(async () => {
-    if (plannedPlaces.length < 2) return;
+    if (plannedStops.length < 2) return;
     setAnalyzing(true);
     setStatus("Finding your places and tracing the roads between them…");
     setStatusTone("neutral");
     try {
-      setTrip(await planTrip(plannedPlaces.map((place) => place.stop)));
+      setTrip(await planTrip(plannedStops));
       setVideo(null);
       window.scrollTo({top: 0});
       setStatus("Route ready. Stops below can be reordered, renamed or added to.");
@@ -292,7 +303,7 @@ export default function TripRecapPage() {
     } finally {
       setAnalyzing(false);
     }
-  }, [plannedPlaces]);
+  }, [plannedStops]);
 
   const refreshPlaces = useCallback(async (target: TripData, granularity: PlaceDetail) => {
     try {
@@ -466,7 +477,7 @@ export default function TripRecapPage() {
   );
 
   const buildButton = (
-    <button type="button" id="analyze" className={trip ? "btn" : "btn primary"} disabled={!readyToAnalyze || busy} onClick={analyze}>
+    <button type="button" id="analyze" className={`${trip ? "btn" : "btn primary"}${analyzing ? " is-busy" : ""}`} disabled={!readyToAnalyze || busy} onClick={analyze} aria-busy={analyzing}>
       {analyzing ? "Tracing route…" : trip ? "Rebuild route" : "Build route"}
     </button>
   );
@@ -517,7 +528,7 @@ export default function TripRecapPage() {
               <MapPreview ref={mapRef} data={trip} styleId={styleId} frame={frame} vehicle={vehicle} playbackSpeed={playbackSpeed} />
             </div>
 
-            <aside className="panel" aria-label="Recap settings">
+            <aside className="panel settings-card" aria-label="Recap settings">
               <section className="panel-section">
                 <h2 className="panel-title">Look</h2>
                 <Segmented label="Map" value={styleId} options={MAP_STYLE_IDS.map((id) => ({value: id, label: MAP_STYLES[id].label}))} onChange={setStyleId} />
@@ -536,7 +547,7 @@ export default function TripRecapPage() {
                 </div>
                 <div className="controls">
                   {exporting ? (
-                    <button type="button" className="btn" onClick={() => exportAbortRef.current?.abort()}>Cancel</button>
+                    <button type="button" className="btn is-busy" onClick={() => exportAbortRef.current?.abort()}>Cancel</button>
                   ) : (
                     <button type="button" id="render" className="btn primary" disabled={busy || !exportSupported} onClick={requestExport}>Export video</button>
                   )}
@@ -556,13 +567,6 @@ export default function TripRecapPage() {
                 </div>
               )}
 
-              <details className="drawer" open>
-                <summary>Stops <span>{trip.observations.length}</span></summary>
-                <div className="drawer-body">
-                  <StopEditor trip={trip} busy={busy || editingRoute} onReorder={reorderStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
-                </div>
-              </details>
-  
               <details className="drawer" open={optionsOpen} onToggle={(event) => setOptionsOpen((event.target as HTMLDetailsElement).open)}>
                 <summary>Media &amp; options <span>{retainedRecords.length}</span></summary>
                 <div className="drawer-body">
@@ -581,6 +585,16 @@ export default function TripRecapPage() {
                 </div>
               </details>
             </aside>
+
+            <section className="panel stops-card" aria-label="Route stops">
+              <header className="stops-card__head">
+                <h2 className="panel-title">Stops</h2>
+                <span className="stops-card__count">{trip.observations.length}</span>
+              </header>
+              <div className="stops-card__body">
+                <StopEditor trip={trip} busy={busy || editingRoute} retracing={editingRoute} onReorder={reorderStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
+              </div>
+            </section>
           </div>
         ) : records.length > 0 ? (
           <section className="setup" aria-label="Your trip media">
@@ -650,8 +664,13 @@ export default function TripRecapPage() {
                 </div>
               )}
               <div className="empty-setup">
+                <section className="landing-ends" aria-label="Start and end">
+                  <p className="eyebrow">Start and end · optional</p>
+                  {routeOptions}
+                  <p className="note">Used for the route from your photos, and as the first and last stops of a route planned by hand.</p>
+                </section>
                 <p className="empty-divider" aria-hidden="true">or</p>
-                <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} />
+                <PlacePlanner places={plannedPlaces} busy={busy} onChange={setPlannedPlaces} onBuild={planRoute} endpointCount={plannedStops.length - plannedPlaces.length} />
                 {status && <p id="status" className={`note status-${statusTone}`} aria-live="polite">{status}</p>}
               </div>
             </div>

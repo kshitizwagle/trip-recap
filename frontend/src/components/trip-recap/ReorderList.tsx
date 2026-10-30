@@ -22,16 +22,28 @@ interface Drag {
   dy: number;
 }
 
-/** Distance from a viewport edge where dragging scrolls the page. */
+/** Distance from the scroll area's edge where dragging scrolls it. */
 const EDGE = 64;
+
+/** The nearest ancestor that scrolls vertically, or null for the page itself. */
+function scrollParent(element: HTMLElement | null): HTMLElement | null {
+  for (let node = element?.parentElement; node; node = node.parentElement) {
+    const {overflowY} = getComputedStyle(node);
+    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) return node;
+  }
+  return null;
+}
+
+const scrollTopOf = (scroller: HTMLElement | null) => (scroller ? scroller.scrollTop : window.scrollY);
 
 /**
  * A list reordered by dragging each row's grip, with pointer events so mouse, pen and touch all work.
  * Arrow keys on a focused grip move that row one place.
  */
 export default function ReorderList<T>({items, getKey, getLabel, renderItem, renderGap, onReorder, isDisabled = false, className = ""}: ReorderListProps<T>) {
+  const listRef = useRef<HTMLOListElement>(null);
   const rowsRef = useRef<Array<HTMLLIElement | null>>([]);
-  const session = useRef<{from: number; startY: number; startScroll: number; mids: number[]; height: number; pointerY: number; raf: number; to: number} | null>(null);
+  const session = useRef<{from: number; startY: number; startScroll: number; mids: number[]; height: number; pointerY: number; raf: number; to: number; scroller: HTMLElement | null} | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
 
   useEffect(() => () => cancelAnimationFrame(session.current?.raf ?? 0), []);
@@ -39,7 +51,7 @@ export default function ReorderList<T>({items, getKey, getLabel, renderItem, ren
   const update = () => {
     const current = session.current;
     if (!current) return;
-    const dy = current.pointerY + window.scrollY - (current.startY + current.startScroll);
+    const dy = current.pointerY + scrollTopOf(current.scroller) - (current.startY + current.startScroll);
     const center = current.mids[current.from] + dy;
     let to = current.from;
     current.mids.forEach((mid, index) => {
@@ -50,14 +62,17 @@ export default function ReorderList<T>({items, getKey, getLabel, renderItem, ren
     setDrag({from: current.from, to, dy});
   };
 
-  // Near the top or bottom of the window the page scrolls, so long lists can be crossed in one drag.
+  // Near the top or bottom of the scroll area it scrolls, so long lists can be crossed in one drag.
   const autoScroll = () => {
     const current = session.current;
     if (!current) return;
-    const {pointerY} = current;
-    const speed = pointerY < EDGE ? -(EDGE - pointerY) / 3 : pointerY > window.innerHeight - EDGE ? (pointerY - window.innerHeight + EDGE) / 3 : 0;
+    const {pointerY, scroller} = current;
+    const top = scroller ? Math.max(0, scroller.getBoundingClientRect().top) : 0;
+    const bottom = scroller ? Math.min(window.innerHeight, scroller.getBoundingClientRect().bottom) : window.innerHeight;
+    const speed = pointerY < top + EDGE ? -(top + EDGE - pointerY) / 3 : pointerY > bottom - EDGE ? (pointerY - bottom + EDGE) / 3 : 0;
     if (speed) {
-      window.scrollBy(0, speed);
+      if (scroller) scroller.scrollTop += speed;
+      else window.scrollBy(0, speed);
       update();
     }
     current.raf = requestAnimationFrame(autoScroll);
@@ -68,8 +83,10 @@ export default function ReorderList<T>({items, getKey, getLabel, renderItem, ren
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const rects = rowsRef.current.slice(0, items.length).map((row) => row?.getBoundingClientRect() ?? new DOMRect());
-    const scroll = window.scrollY;
+    const scroller = scrollParent(listRef.current);
+    const scroll = scrollTopOf(scroller);
     session.current = {
+      scroller,
       from: index,
       startY: event.clientY,
       startScroll: scroll,
@@ -117,7 +134,7 @@ export default function ReorderList<T>({items, getKey, getLabel, renderItem, ren
   };
 
   return (
-    <ol className={`reorder-list${drag ? " is-dragging" : ""} ${className}`.trim()}>
+    <ol ref={listRef} className={`reorder-list${drag ? " is-dragging" : ""} ${className}`.trim()}>
       {items.map((item, index) => {
         const label = getLabel(item);
         const handle = (

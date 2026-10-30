@@ -53,6 +53,17 @@ function lineData(scene: RecapScene): GeoJSON.Feature | GeoJSON.FeatureCollectio
   return {type: "Feature", properties: {}, geometry: {type: "LineString", coordinates: scene.coords}};
 }
 
+/** Dashed tethers from the road to each off-road photo spot, and a ring at the observed GPS point. */
+function spotData(scene: RecapScene): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: scene.offRoute().flatMap(({on, gps}) => [
+      {type: "Feature" as const, properties: {}, geometry: {type: "LineString" as const, coordinates: [on, gps]}},
+      {type: "Feature" as const, properties: {}, geometry: {type: "Point" as const, coordinates: gps}},
+    ]),
+  };
+}
+
 /** Routed roads are inferred, so they are dashed; a line that only joins GPS points is faint and solid. */
 function roadPaint(map: maplibregl.Map, scene: RecapScene) {
   const inferred = Boolean(scene.data.route);
@@ -62,6 +73,9 @@ function roadPaint(map: maplibregl.Map, scene: RecapScene) {
 }
 
 function addRouteLayers(map: maplibregl.Map, scene: RecapScene) {
+  map.addSource("trip-spots", {type: "geojson", data: spotData(scene)});
+  map.addLayer({id: "trip-spot-tether", type: "line", source: "trip-spots", filter: ["==", ["geometry-type"], "LineString"], paint: {"line-color": "#edecee", "line-opacity": 0.4, "line-width": 1.2, "line-dasharray": [2, 2]}});
+  map.addLayer({id: "trip-spot", type: "circle", source: "trip-spots", filter: ["==", ["geometry-type"], "Point"], paint: {"circle-radius": 3, "circle-color": "rgba(0, 0, 0, 0)", "circle-stroke-color": "#edecee", "circle-stroke-opacity": 0.5, "circle-stroke-width": 1.2}});
   map.addSource("trip-route", {type: "geojson", lineMetrics: true, data: lineData(scene)});
   const round = {"line-join": "round", "line-cap": "round"} as const;
   map.addLayer({id: "trip-road", type: "line", source: "trip-route", layout: {"line-join": "round"}, paint: {"line-width": 2.6}});
@@ -169,6 +183,8 @@ const MapPreview = forwardRef(function MapPreview(
   const sceneRef = useRef<RecapScene | null>(null);
   const headRef = useRef<maplibregl.Marker | null>(null);
   const pillsRef = useRef<Pill[]>([]);
+  /** Bumped whenever the pills are rebuilt, so their reached/current classes are reapplied. */
+  const pillsGenRef = useRef(0);
   const timeRef = useRef(0);
   const playingRef = useRef(false);
   const followRef = useRef(true);
@@ -241,11 +257,12 @@ const MapPreview = forwardRef(function MapPreview(
     pillsRef.current.forEach((pill) => pill.marker.remove());
     pillsRef.current = [];
     if (!map || !scene) return;
-    pillsRef.current = scene.data.observations.map((observation, index) => {
+    pillsRef.current = scene.data.observations.map((_, index) => {
       const {element, label} = pillElement(scene, index);
-      const marker = new maplibregl.Marker({element}).setLngLat([observation.longitude, observation.latitude]).addTo(map);
+      const marker = new maplibregl.Marker({element}).setLngLat(scene.stopPoint(index)).addTo(map);
       return {marker, label, size: null};
     });
+    pillsGenRef.current += 1;
     layoutDueRef.current = 0;
     dirtyRef.current = true;
   }, []);
@@ -340,6 +357,7 @@ const MapPreview = forwardRef(function MapPreview(
     const source = map.getSource("trip-route") as maplibregl.GeoJSONSource | undefined;
     if (source) {
       source.setData(lineData(scene));
+      (map.getSource("trip-spots") as maplibregl.GeoJSONSource | undefined)?.setData(spotData(scene));
       roadPaint(map, scene);
     } else {
       addRouteLayers(map, scene);
@@ -426,7 +444,7 @@ const MapPreview = forwardRef(function MapPreview(
 
       const pills = pillsRef.current;
       const current = state.phase === "outro" ? -1 : state.atIndex;
-      const stops = `${state.atIndex}|${state.toIndex}|${current}|${pills.length}`;
+      const stops = `${state.atIndex}|${state.toIndex}|${current}|${pillsGenRef.current}`;
       if (stops !== shownStops) {
         shownStops = stops;
         layoutDueRef.current = 0;

@@ -232,6 +232,27 @@ export class RecapScene {
     return at / (this.mercator[this.mercator.length - 1] || 1);
   }
 
+  /**
+   * Where the traveller passes a stop: its point on the routed line. Without a route the line joins
+   * the GPS points themselves, so the GPS point is used.
+   */
+  stopPoint(index: number): LngLat {
+    const observation = this.data.observations[index];
+    if (!observation) return [0, 0];
+    if (!this.data.route || this.coords.length < 2) return [observation.longitude, observation.latitude];
+    return this.position(observation.progress).point;
+  }
+
+  /** Stops whose photos were taken away from the road: the road point and the observed GPS point. */
+  offRoute(minMeters = 25): Array<{index: number; on: LngLat; gps: LngLat}> {
+    if (!this.data.route) return [];
+    return this.data.observations.flatMap((observation, index) => {
+      const gps: LngLat = [observation.longitude, observation.latitude];
+      const on = this.stopPoint(index);
+      return haversine(on, gps) > minMeters ? [{index, on, gps}] : [];
+    });
+  }
+
   /** The pill text for a stop: its place name, else its first file. */
   stopLabel(index: number): string {
     const observation = this.data.observations[index];
@@ -447,8 +468,26 @@ export class RecapScene {
     const observations = this.data.observations;
     const reachedUpTo = state.atIndex;
     const font = 11 * unit;
+    // Observed GPS spots off the road: a faint ring tethered to where the route passes.
+    ctx.save();
+    ctx.setLineDash([3 * unit, 3 * unit]);
+    ctx.lineWidth = 1.2 * unit;
+    ctx.strokeStyle = "rgba(237, 236, 238, 0.4)";
+    for (const {on, gps} of this.offRoute()) {
+      const a = project(on);
+      const b = project(gps);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 3 * unit, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
     observations.forEach((observation, index) => {
-      const p = project([observation.longitude, observation.latitude]);
+      const p = project(this.stopPoint(index));
       const reached = index <= reachedUpTo;
       ctx.beginPath();
       ctx.arc(p.x, p.y, (reached ? 5 : 3.5) * unit, 0, Math.PI * 2);
@@ -466,7 +505,7 @@ export class RecapScene {
       .sort((a, b) => (b.index === current ? 1 : 0) - (a.index === current ? 1 : 0) || b.index - a.index);
     ctx.textBaseline = "middle";
     for (const {observation, index} of order) {
-      const p = project([observation.longitude, observation.latitude]);
+      const p = project(this.stopPoint(index));
       if (p.x < -50 || p.y < -50 || p.x > width + 50 || p.y > height + 50) continue;
       const number = String(observation.order).padStart(2, "0");
       const label = this.stopLabel(index);

@@ -32,6 +32,7 @@ export default function LocationAutocomplete({
   const [activeIndex, setActiveIndex] = useState(-1);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [noMatch, setNoMatch] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
   const selectionRef = useRef(false);
   const closeTimerRef = useRef<number | null>(null);
@@ -39,6 +40,7 @@ export default function LocationAutocomplete({
 
   useEffect(() => {
     requestRef.current?.abort();
+    setNoMatch(false);
 
     if (selectionRef.current) {
       selectionRef.current = false;
@@ -70,6 +72,7 @@ export default function LocationAutocomplete({
           setSuggestions(next);
           setActiveIndex(-1);
           setIsOpen(next.length > 0);
+          setNoMatch(next.length === 0);
         })
         .catch((error: unknown) => {
           if (isAbortError(error)) return;
@@ -136,7 +139,7 @@ export default function LocationAutocomplete({
   return (
     <label className="text-control location-control" htmlFor={id}>
       <span>{label}</span>
-      <span className="location-input-wrap">
+      <span className={isLoading ? "location-input-wrap is-loading" : "location-input-wrap"}>
         <input
           id={id}
           value={value}
@@ -162,6 +165,12 @@ export default function LocationAutocomplete({
             aria-hidden="true"
             className="location-loading-spinner"
           />
+        )}
+        {isLoading && !suggestions.length && (
+          <span className="location-suggestions location-hint" role="status">Searching places…</span>
+        )}
+        {noMatch && !isLoading && (
+          <span className="location-suggestions location-hint" role="status">No places found. Try a nearby town, or press Add as typed.</span>
         )}
         {isOpen && suggestions.length > 0 && (
           <ul id={listboxId} className="location-suggestions" role="listbox">
