@@ -2,7 +2,9 @@
 
 import {useState} from "react";
 import {Button, Stack, Text} from "@astryxdesign/core";
+import InsertGap from "@/components/trip-recap/InsertGap";
 import LocationAutocomplete from "@/components/trip-recap/LocationAutocomplete";
+import ReorderList from "@/components/trip-recap/ReorderList";
 import type {RouteStopInput} from "@/lib/trip-api";
 
 export type PlannedStop = Exclude<RouteStopInput, {id: string}>;
@@ -34,17 +36,27 @@ export default function PlacePlanner({places, busy, onChange, onBuild}: PlacePla
     setQuery("");
   };
 
-  const move = (index: number, delta: -1 | 1) => {
+  const [insertAt, setInsertAt] = useState<number | null>(null);
+
+  const reorder = (from: number, to: number) => {
     const next = [...places];
-    [next[index], next[index + delta]] = [next[index + delta], next[index]];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
     onChange(next);
+  };
+
+  const insert = (stop: PlannedStop, label: string, position: number) => {
+    const next = [...places];
+    next.splice(position, 0, {label, stop, key: `${Date.now()}-${Math.random()}`});
+    onChange(next);
+    setInsertAt(null);
   };
 
   return (
     <Stack gap={4} className="place-planner">
       <Stack gap={1}>
         <Text className="planner-title">No photos? Plan the route by hand.</Text>
-        <Text type="supporting">Add the places you went, in order. Roads between them are traced for you.</Text>
+        <Text type="supporting">Add the places you went. Drag to reorder, or add a place between two others. Roads between them are traced for you.</Text>
       </Stack>
 
       <LocationAutocomplete
@@ -62,19 +74,35 @@ export default function PlacePlanner({places, busy, onChange, onBuild}: PlacePla
       />
 
       {count > 0 && (
-        <Stack as="ol" gap={0} className="editor-stops">
-          {places.map((place, index) => (
-            <Stack as="li" key={place.key} direction="horizontal" gap={3} paddingBlock={2} vAlign="center">
+        <ReorderList
+          className="editor-stops"
+          items={places}
+          getKey={(place) => place.key}
+          getLabel={(place) => place.label}
+          isDisabled={busy || insertAt !== null}
+          onReorder={reorder}
+          renderGap={(position) => (
+            <InsertGap
+              position={position}
+              count={count}
+              isOpen={insertAt === position}
+              isDisabled={busy}
+              onOpen={() => setInsertAt(position)}
+              onClose={() => setInsertAt(null)}
+              onAdd={insert}
+            />
+          )}
+          renderItem={(place, index, handle) => (
+            <Stack direction="horizontal" gap={3} paddingBlock={2} vAlign="center">
+              {handle}
               <Text className="editor-stop-number">{String(index + 1).padStart(2, "0")}</Text>
               <Text className="editor-stop-copy">{place.label}</Text>
               <Stack direction="horizontal" gap={1} vAlign="center" className="editor-stop-actions">
-                <Button label="Move up" icon={<Text aria-hidden="true">↑</Text>} isIconOnly variant="ghost" size="sm" isDisabled={busy || index === 0} onClick={() => move(index, -1)} />
-                <Button label="Move down" icon={<Text aria-hidden="true">↓</Text>} isIconOnly variant="ghost" size="sm" isDisabled={busy || index === count - 1} onClick={() => move(index, 1)} />
                 <Button label={`Remove ${place.label}`} icon={<Text aria-hidden="true">×</Text>} isIconOnly variant="ghost" size="sm" isDisabled={busy} onClick={() => onChange(places.filter((item) => item.key !== place.key))} />
               </Stack>
             </Stack>
-          ))}
-        </Stack>
+          )}
+        />
       )}
 
       <Stack direction="horizontal" gap={3} vAlign="center" wrap="wrap">

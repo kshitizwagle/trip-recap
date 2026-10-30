@@ -50,7 +50,41 @@ button, input, select, textarea { font: inherit; }
 
 
 .editor-stops { margin: 0; padding: 0; list-style: none; }
-.editor-stops li + li { border-top: 1px solid var(--aura-border); }
+
+/* ---------- Reorderable stops: drag grips, and an "add here" seam between every two rows ---------- */
+.reorder-row { position: relative; border-top: 1px solid var(--aura-border); transform: translateY(var(--shift, 0)); transition: transform 180ms var(--aura-ease-out); }
+.reorder-list > .reorder-row:first-child, .reorder-list > .reorder-gap:first-child + .reorder-row { border-top: 0; }
+.reorder-row.is-lifted { z-index: 5; border-radius: 6px; background: var(--aura-surface-raised); box-shadow: 0 0 0 1px var(--aura-accent-soft), var(--aura-shadow-lg); transition: none; }
+.reorder-list.is-dragging { user-select: none; }
+.drag-handle {
+  flex: 0 0 auto; display: grid; place-items: center; width: 28px; min-height: 36px; margin-left: -6px; padding: 0;
+  border: 0; border-radius: 6px; background: none; color: var(--aura-metadata); cursor: grab; touch-action: none;
+}
+.drag-handle svg { width: 10px; height: 16px; fill: currentColor; }
+.drag-handle:hover:not(:disabled) { color: var(--aura-fg); background: var(--aura-surface); }
+.drag-handle:disabled { cursor: not-allowed; opacity: 0.4; }
+.reorder-list.is-dragging .drag-handle { cursor: grabbing; }
+
+.reorder-gap { position: relative; z-index: 2; height: 0; }
+.reorder-list.is-dragging .reorder-gap { visibility: hidden; }
+.insert-gap {
+  position: absolute; inset: -11px 0 auto; display: flex; align-items: center; justify-content: center; height: 22px; padding: 0;
+  border: 0; background: none; color: var(--aura-accent); cursor: pointer; opacity: 0; transition: opacity 140ms var(--aura-ease-out);
+}
+.insert-gap::before { content: ""; position: absolute; inset: 50% 0 auto; height: 1px; background: var(--aura-accent-soft); }
+.insert-gap span { position: relative; padding: 2px 10px; border: 1px solid var(--aura-accent-soft); border-radius: 999px; background: var(--aura-bg-deep); font: 600 11px/1.4 var(--aura-mono); }
+.insert-gap:hover, .insert-gap:focus-visible { opacity: 1; outline: none; }
+.insert-gap:focus-visible span { box-shadow: var(--aura-shadow-focus); }
+.insert-gap:disabled { display: none; }
+.reorder-gap:has(.insert-form) { height: auto; }
+.insert-form { display: grid; gap: 10px; margin: 8px 0; padding: 14px; border: 1px solid var(--aura-accent-soft); border-radius: 8px; background: var(--aura-surface); }
+.insert-form__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Touch has no hover, so the seams show as small buttons at the row edge. */
+@media (hover: none) {
+  .insert-gap { inset: -14px auto auto 50%; height: 28px; opacity: 1; transform: translateX(-50%); }
+  .insert-gap::before { display: none; }
+  .insert-gap span { padding: 4px 12px; }
+}
 .editor-stop-copy { flex: 1; min-width: 0; }
 .editor-stop-actions { flex: 0 0 auto; }
 .editor-stop-name { padding: 0; border: 0; border-bottom: 1px dashed transparent; background: none; color: var(--aura-fg); font: 500 14px/1.4 var(--aura-mono); text-align: start; cursor: text; }
@@ -89,15 +123,6 @@ button, input, select, textarea { font: inherit; }
 /* ---------- Map ---------- */
 .map-host { position: absolute; inset: 0; }
 .maplibregl-canvas { outline: none; }
-.media-overlay {
-  position: absolute; z-index: 7; right: 3.3%; bottom: 20%; display: none;
-  max-width: 86%; max-height: 36%; padding: 7px;
-  border: 1px solid var(--aura-gray); border-radius: 6px;
-  background: rgba(15, 14, 20, 0.94); box-shadow: var(--aura-shadow-lg);
-}
-.media-overlay.is-visible { display: block; animation: overlay-in 420ms var(--aura-ease-out); }
-.media-overlay img, .media-overlay video { display: block; max-width: 100%; max-height: 30cqh; border-radius: 2px; object-fit: contain; }
-@keyframes overlay-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Studio: one screen, after the trip-map artifact ---------- */
 .studio { display: flex; flex-direction: column; gap: 14px; max-width: 1280px; margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
@@ -146,7 +171,6 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
   border-radius: 8px; background: var(--aura-bg-deep);
   box-shadow: 0 0 0 1px var(--aura-border), 0 20px 60px rgba(0, 0, 0, 0.45);
 }
-.media-overlay img, .media-overlay video { max-height: 30cqh; }
 .maplibregl-ctrl-attrib { background: rgba(15, 14, 20, 0.6) !important; font-size: 10px; }
 .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { color: var(--aura-muted) !important; }
 
@@ -235,7 +259,6 @@ label.btn:focus-within { outline: 2px solid var(--aura-accent); outline-offset: 
 @media (max-width: 640px) {
   .studio { padding-top: 12px; gap: 12px; }
   .map-canvas-frame { width: min(100%, calc(72vh * var(--frame-ratio, 0.5625))); }
-  .media-overlay { right: 12px; bottom: 12px; left: 12px; max-width: none; }
   .controls { gap: 10px; }
   .scrub { flex-basis: 100%; order: -1; }
 }

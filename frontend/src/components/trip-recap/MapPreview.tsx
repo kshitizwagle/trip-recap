@@ -3,7 +3,7 @@
 import maplibregl from "maplibre-gl";
 import {forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref} from "react";
 import {ARROW, createSceneMap, FRAMES, type FrameId, type MapStyleId, RecapScene} from "@/lib/recap-scene";
-import type {TripData, TripMedia} from "@/lib/trip-types";
+import type {TripData} from "@/lib/trip-types";
 
 export interface MapPreviewHandle {
   replayRoute: () => void;
@@ -165,7 +165,6 @@ const MapPreview = forwardRef(function MapPreview(
     line2: useRef<HTMLParagraphElement>(null),
     bar: useRef<HTMLSpanElement>(null),
   };
-  const overlayRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const sceneRef = useRef<RecapScene | null>(null);
   const headRef = useRef<maplibregl.Marker | null>(null);
@@ -182,8 +181,6 @@ const MapPreview = forwardRef(function MapPreview(
   const [mapFailed, setMapFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
-  const [overlay, setOverlay] = useState<TripMedia | null>(null);
-  const overlayIdRef = useRef<string | null>(null);
 
   speedRef.current = playbackSpeed;
 
@@ -442,7 +439,7 @@ const MapPreview = forwardRef(function MapPreview(
       if (now >= layoutDueRef.current && pills.length) {
         layoutDueRef.current = now + PILL_LAYOUT_MS;
         const origin = map.getContainer().getBoundingClientRect();
-        const blocked = [hudRefs.title, hudRefs.stat, hudRefs.panel, overlayRef]
+        const blocked = [hudRefs.title, hudRefs.stat, hudRefs.panel]
           .map((item) => item.current)
           .filter((element): element is HTMLDivElement => Boolean(element && element.offsetParent))
           .map((element) => {
@@ -468,14 +465,6 @@ const MapPreview = forwardRef(function MapPreview(
         hudRefs.panel.current?.classList.toggle("is-moving", text.moving);
       }
       if (hudRefs.bar.current) hudRefs.bar.current.style.transform = `scaleX(${scene.duration ? Math.min(1, timeRef.current / scene.duration) : 0})`;
-
-      const visible = scene.visibleMedia(timeRef.current);
-      const id = visible?.media.id ?? null;
-      if (id !== overlayIdRef.current) {
-        overlayIdRef.current = id;
-        setOverlay(visible?.media ?? null);
-        layoutDueRef.current = 0;
-      }
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -503,15 +492,6 @@ const MapPreview = forwardRef(function MapPreview(
             <p ref={hudRefs.line2} className="trip-hud__sub" />
           </div>
           <span className="trip-hud__track"><span ref={hudRefs.bar} className="trip-hud__bar" /></span>
-        </div>
-        <div ref={overlayRef} className={overlay ? "media-overlay is-visible" : "media-overlay"}>
-          {overlay ? (
-            overlay.media_type === "video" ? (
-              <video key={overlay.id} src={overlay.url} muted playsInline autoPlay aria-label={overlay.filename} />
-            ) : (
-              <img key={overlay.id} src={overlay.preview_url} alt={overlay.filename} onError={() => setOverlay(null)} />
-            )
-          ) : null}
         </div>
         {!mapReady && !mapFailed && <p className="trip-map-status" role="status">loading map…</p>}
         {mapFailed && <p className="trip-map-status">The map could not load in this browser.</p>}

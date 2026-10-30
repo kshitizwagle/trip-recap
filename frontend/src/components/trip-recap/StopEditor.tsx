@@ -2,14 +2,15 @@
 
 import {useState} from "react";
 import {Button, Stack, Text, Token} from "@astryxdesign/core";
-import LocationAutocomplete from "@/components/trip-recap/LocationAutocomplete";
+import InsertGap from "@/components/trip-recap/InsertGap";
+import ReorderList from "@/components/trip-recap/ReorderList";
 import type {RouteStopInput} from "@/lib/trip-api";
 import type {TripData} from "@/lib/trip-types";
 
 interface StopEditorProps {
   trip: TripData;
   busy: boolean;
-  onMove: (index: number, delta: -1 | 1) => void;
+  onReorder: (from: number, to: number) => void;
   onRemove: (index: number) => void;
   onRename: (observationId: string, name: string) => void;
   onAdd: (stop: RouteStopInput, position: number) => void;
@@ -17,20 +18,15 @@ interface StopEditorProps {
 
 const ENDPOINT_LABELS = {start: "Start point you set", end: "End point you set", return: "Return to start"} as const;
 
-function shortName(displayName: string): string {
-  return displayName.split(",")[0]?.trim() || displayName.trim();
-}
-
 function formatDate(value: string): string {
   return new Date(value).toLocaleString([], {dateStyle: "medium", timeStyle: "short"});
 }
 
-/** The route as an editable list: reorder, rename, remove, and add places by search. */
-export default function StopEditor({trip, busy, onMove, onRemove, onRename, onAdd}: StopEditorProps) {
+/** The route as an editable list: drag to reorder, rename, remove, and add a place between any two stops. */
+export default function StopEditor({trip, busy, onReorder, onRemove, onRename, onAdd}: StopEditorProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [query, setQuery] = useState("");
-  const [position, setPosition] = useState<number>(-1);
+  const [insertAt, setInsertAt] = useState<number | null>(null);
   const count = trip.observations.length;
 
   const commitRename = (id: string) => {
@@ -39,17 +35,38 @@ export default function StopEditor({trip, busy, onMove, onRemove, onRename, onAd
   };
 
   return (
-    <Stack gap={4}>
+    <Stack gap={3}>
       <Stack direction="horizontal" hAlign="between" vAlign="center" gap={2}>
         <Text className="eyebrow">{count} stop{count === 1 ? "" : "s"} · in route order</Text>
-        <Text type="supporting">↑ ↓ to reorder</Text>
+        <Text type="supporting">drag to reorder · + to add between</Text>
       </Stack>
-      <Stack as="ol" gap={0} className="editor-stops">
-        {trip.observations.map((observation, index) => {
+      <ReorderList
+        className="editor-stops"
+        items={trip.observations}
+        getKey={(observation) => observation.id}
+        getLabel={(observation) => observation.place}
+        isDisabled={busy || insertAt !== null}
+        onReorder={onReorder}
+        renderGap={(position) => (
+          <InsertGap
+            position={position}
+            count={count}
+            isOpen={insertAt === position}
+            isDisabled={busy}
+            onOpen={() => setInsertAt(position)}
+            onClose={() => setInsertAt(null)}
+            onAdd={(stop, _label, at) => {
+              onAdd(stop, at);
+              setInsertAt(null);
+            }}
+          />
+        )}
+        renderItem={(observation, index, handle) => {
           const custom = observation.media_files.length === 0;
           const origin = observation.endpoint ? ENDPOINT_LABELS[observation.endpoint] : custom ? "Place you added" : observation.media_files.join(", ");
           return (
-            <Stack as="li" key={observation.id} direction="horizontal" gap={3} paddingBlock={3} vAlign="start" className="editor-stop">
+            <Stack direction="horizontal" gap={3} paddingBlock={3} vAlign="start" className="editor-stop">
+              {handle}
               <Text className="editor-stop-number">{String(index + 1).padStart(2, "0")}</Text>
               <Stack gap={1} className="editor-stop-copy">
                 {editing === observation.id ? (
@@ -80,57 +97,18 @@ export default function StopEditor({trip, busy, onMove, onRemove, onRename, onAd
                     {observation.place}
                   </button>
                 )}
-                <Text type="supporting">{origin}</Text>
+                <Text type="supporting" maxLines={1}>{origin}</Text>
                 {!custom && <Text type="supporting">{formatDate(observation.arrival)}</Text>}
                 {custom && <Stack direction="horizontal"><Token label={observation.endpoint ? "from options" : "added"} color="purple" size="sm" /></Stack>}
               </Stack>
               <Stack direction="horizontal" gap={1} vAlign="center" className="editor-stop-actions">
-                <Button label="Move up" icon={<Text aria-hidden="true">↑</Text>} isIconOnly variant="ghost" size="sm" isDisabled={busy || index === 0} onClick={() => onMove(index, -1)} />
-                <Button label="Move down" icon={<Text aria-hidden="true">↓</Text>} isIconOnly variant="ghost" size="sm" isDisabled={busy || index === count - 1} onClick={() => onMove(index, 1)} />
                 <Button label="Remove from route" icon={<Text aria-hidden="true">×</Text>} isIconOnly variant="ghost" size="sm" isDisabled={busy || count <= 1} onClick={() => onRemove(index)} />
               </Stack>
             </Stack>
           );
-        })}
-      </Stack>
-
-      <Stack className="editor-note" padding={4} gap={3}>
-        <Text className="eyebrow">add a place</Text>
-        <LocationAutocomplete
-          id="add-stop"
-          label="Search for a place"
-          value={query}
-          onChange={setQuery}
-          onSelect={(suggestion) => {
-            if (!suggestion.display_name) return;
-            onAdd({latitude: suggestion.latitude, longitude: suggestion.longitude, name: shortName(suggestion.display_name)}, position < 0 ? count : position);
-            setQuery("");
-          }}
-          placeholder="e.g. Lumbini Palace Resort"
-          isDisabled={busy}
-        />
-        <label className="text-control" htmlFor="add-stop-position">
-          <span>Position</span>
-          <select id="add-stop-position" className="editor-select" value={position} disabled={busy} onChange={(event) => setPosition(Number(event.target.value))}>
-            <option value={-1}>At the end</option>
-            <option value={0}>At the start</option>
-            {trip.observations.slice(0, -1).map((observation, index) => (
-              <option key={observation.id} value={index + 1}>After {String(index + 1).padStart(2, "0")} · {observation.place}</option>
-            ))}
-          </select>
-        </label>
-        <Button
-          label="Add to route"
-          variant="secondary"
-          width="100%"
-          isDisabled={busy || query.trim().length < 2}
-          onClick={() => {
-            onAdd({query: query.trim()}, position < 0 ? count : position);
-            setQuery("");
-          }}
-        />
-        <Text type="supporting">Pick a suggestion to add it right away, or type a name and press Add. Added places have no photos, so travel time is estimated from distance.</Text>
-      </Stack>
+        }}
+      />
+      <Text type="supporting">Added places have no photos, so travel time to them is estimated from distance.</Text>
     </Stack>
   );
 }

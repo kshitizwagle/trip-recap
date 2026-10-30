@@ -7,7 +7,7 @@
 import type maplibregl from "maplibre-gl";
 import {buildMp4File, type VideoSample} from "./engine/mp4.ts";
 import {createSceneMap, type FrameId, frameSize, type MapStyleId, RecapScene} from "./recap-scene";
-import type {TripData, TripMedia} from "./trip-types";
+import type {TripData} from "./trip-types";
 
 export const EXPORT_MAX_SECONDS = 300;
 export const EXPORT_QUALITIES = [720, 1080, 1440] as const;
@@ -67,78 +67,6 @@ function waitForEvent(map: maplibregl.Map, event: "load" | "render", timeoutMs: 
   });
 }
 
-function loadImage(url: string): Promise<HTMLImageElement | null> {
-  return new Promise((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = url;
-  });
-}
-
-function loadVideo(url: string): Promise<HTMLVideoElement | null> {
-  return new Promise((resolve) => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-    video.onloadeddata = () => resolve(video);
-    video.onerror = () => resolve(null);
-    video.src = url;
-  });
-}
-
-function seek(video: HTMLVideoElement, time: number): Promise<void> {
-  const target = Math.max(0, Math.min(time, (video.duration || 0) - 0.05));
-  if (Math.abs(video.currentTime - target) < 0.01) return Promise.resolve();
-  return new Promise((resolve) => {
-    const done = () => resolve();
-    video.addEventListener("seeked", done, {once: true});
-    setTimeout(done, 1500);
-    video.currentTime = target;
-  });
-}
-
-type MediaSource = {item: TripMedia; image?: HTMLImageElement | null; video?: HTMLVideoElement | null};
-
-async function drawMedia(ctx: CanvasRenderingContext2D, scene: RecapScene, media: Map<string, MediaSource>, time: number, width: number, height: number) {
-  const visible = scene.visibleMedia(time);
-  if (!visible) return;
-  const entry = media.get(visible.media.id);
-  let source: CanvasImageSource | null = null;
-  let sourceWidth = 0;
-  let sourceHeight = 0;
-  if (entry?.video) {
-    await seek(entry.video, time - visible.shownAt);
-    source = entry.video;
-    sourceWidth = entry.video.videoWidth;
-    sourceHeight = entry.video.videoHeight;
-  } else if (entry?.image) {
-    source = entry.image;
-    sourceWidth = entry.image.naturalWidth;
-    sourceHeight = entry.image.naturalHeight;
-  }
-  if (!source || !sourceWidth || !sourceHeight) return;
-  const box = RecapScene.mediaBox(width, height, sourceWidth, sourceHeight);
-  const alpha = Math.min(1, Math.max(0, (time - visible.shownAt) / 0.4));
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(0, (1 - alpha) * 16 * box.unit);
-  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
-  ctx.shadowBlur = 32 * box.unit;
-  ctx.shadowOffsetY = 12 * box.unit;
-  ctx.beginPath();
-  ctx.roundRect(box.x, box.y, box.w + box.pad * 2, box.h + box.pad * 2, box.radius);
-  ctx.fillStyle = "rgba(15, 14, 20, 0.94)";
-  ctx.fill();
-  ctx.shadowColor = "transparent";
-  ctx.lineWidth = box.unit;
-  ctx.strokeStyle = "#6d6d6d";
-  ctx.stroke();
-  ctx.drawImage(source, box.x + box.pad, box.y + box.pad, box.w, box.h);
-  ctx.restore();
-}
-
 /** Renders the trip to an H.264 MP4 entirely in the browser. */
 export async function exportRecapVideo(data: TripData, options: ExportOptions): Promise<Blob> {
   if (!canExportVideo()) throw new Error("Video export needs WebCodecs. Try a recent Chrome, Edge or Safari.");
@@ -165,7 +93,6 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
     preserveDrawingBuffer: true,
   });
 
-  const media = new Map<string, MediaSource>();
   const encoded: VideoSample[] = [];
   let avcC: Uint8Array | null = null;
   let encoderError: unknown = null;
@@ -200,10 +127,6 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
     encoder.configure(config);
     await waitForEvent(map, "load", 20_000);
     checkAbort();
-    for (const item of data.trip.media) {
-      if (!timeline.events.some((event) => event.type === "media_show" && event.payload.media_id === item.id)) continue;
-      media.set(item.id, item.media_type === "video" ? {item, video: await loadVideo(item.url)} : {item, image: await loadImage(item.preview_url)});
-    }
 
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -235,7 +158,6 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
         timeProgress: sourceDuration ? time / sourceDuration : 1,
         attribution: attribution(),
       });
-      await drawMedia(ctx, scene, media, time, width, height);
 
       const frame = new VideoFrame(canvas, {timestamp: Math.round((index * 1_000_000) / fps), duration: Math.round(1_000_000 / fps)});
       encoder.encode(frame, {keyFrame: index % (fps * 2) === 0});
@@ -252,7 +174,6 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
     return new Blob([file as BlobPart], {type: "video/mp4"});
   } finally {
     if (encoder.state !== "closed") encoder.close();
-    media.forEach((entry) => entry.video?.removeAttribute("src"));
     map.remove();
     host.remove();
   }

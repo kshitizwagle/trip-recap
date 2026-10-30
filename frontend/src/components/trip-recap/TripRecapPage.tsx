@@ -351,13 +351,12 @@ export default function TripRecapPage() {
     [trip],
   );
 
-  const moveStop = useCallback(
-    (index: number, delta: -1 | 1) => {
-      if (!trip) return;
+  const reorderStop = useCallback(
+    (from: number, to: number) => {
+      if (!trip || from === to) return;
       const ids = trip.observations.map((item) => ({id: item.id}));
-      const target = index + delta;
-      if (target < 0 || target >= ids.length) return;
-      [ids[index], ids[target]] = [ids[target], ids[index]];
+      const [moved] = ids.splice(from, 1);
+      ids.splice(to, 0, moved);
       void editStops(ids, "Stops reordered.");
     },
     [editStops, trip],
@@ -560,7 +559,7 @@ export default function TripRecapPage() {
               <details className="drawer" open>
                 <summary>Stops <span>{trip.observations.length}</span></summary>
                 <div className="drawer-body">
-                  <StopEditor trip={trip} busy={busy || editingRoute} onMove={moveStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
+                  <StopEditor trip={trip} busy={busy || editingRoute} onReorder={reorderStop} onRemove={removeStop} onRename={renamePoint} onAdd={addStop} />
                 </div>
               </details>
   

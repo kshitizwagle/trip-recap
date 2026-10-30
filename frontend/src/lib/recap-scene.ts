@@ -5,9 +5,9 @@
 // timeline through playbackStateAt, so what you preview is what you export.
 
 import maplibregl from "maplibre-gl";
-import {playbackStateAt, type PlaybackState, visibleMediaAt} from "./engine/timeline.ts";
+import {playbackStateAt, type PlaybackState} from "./engine/timeline.ts";
 import type {Timeline} from "./engine/models.ts";
-import type {TripData, TripMedia} from "./trip-types";
+import type {TripData} from "./trip-types";
 
 /* ---------- Map styles ---------- */
 
@@ -272,13 +272,6 @@ export class RecapScene {
   state(time: number): PlaybackState {
     if (!this.timeline) return {progress: 0, atIndex: 0, toIndex: null, moveProgress: 0, phase: "intro"};
     return playbackStateAt(this.timeline, this.data.observations, time);
-  }
-
-  visibleMedia(time: number): {media: TripMedia; shownAt: number} | null {
-    if (!this.timeline) return null;
-    const visible = visibleMediaAt(this.timeline, time);
-    const media = visible ? this.data.trip.media.find((item) => item.id === visible.mediaId) : undefined;
-    return visible && media ? {media, shownAt: visible.shownAt} : null;
   }
 
   private indexAt(meters: number): number {
@@ -669,19 +662,5 @@ export class RecapScene {
       ctx.fillText(options.attribution, width - 8 * unit, height - 7 * unit);
     }
     ctx.restore();
-  }
-
-  /** Where to place a media card (device px) so it clears the HUD. */
-  static mediaBox(width: number, height: number, sourceWidth: number, sourceHeight: number) {
-    const unit = Math.min(width, height) / 540;
-    const pad = 7 * unit;
-    const margin = 18 * unit;
-    const maxW = width * (width < height ? 0.86 : 0.42) - pad * 2;
-    const maxH = height * (width < height ? 0.34 : 0.5) - pad * 2;
-    const scale = Math.min(maxW / sourceWidth, maxH / sourceHeight);
-    const w = sourceWidth * scale;
-    const h = sourceHeight * scale;
-    const bottomReserve = 104 * unit;
-    return {x: width - margin - w - pad * 2, y: height - bottomReserve - h - pad * 2 - 8 * unit, w, h, pad, radius: 6 * unit, unit};
   }
 }
