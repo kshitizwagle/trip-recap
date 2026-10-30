@@ -2,7 +2,7 @@
 
 import type {Observation, Timeline, TimelineEvent, Trip} from "./models.ts";
 import {timeMs} from "./models.ts";
-import {haversineMeters} from "./geo.ts";
+import {pathMeters} from "./geo.ts";
 
 /** Assumed speed when stops are out of time order (reordered or added by hand). */
 export const FALLBACK_SPEED_KPH = 40;
@@ -66,7 +66,7 @@ export class TimelineBuilder {
       const previous = observations[i - 1];
       const current = observations[i];
       let realGap = (timeMs(current.arrival) - timeMs(previous.departure)) / 1000;
-      const meters = haversineMeters(previous.latitude, previous.longitude, current.latitude, current.longitude);
+      const meters = pathMeters([previous, ...(current.via ?? []), current]);
       if (!(realGap > 0)) {
         // No usable clock gap (same moment, or stops reordered/added by hand): estimate from distance.
         realGap = meters > 1 ? Math.max(60, (meters / 1000 / FALLBACK_SPEED_KPH) * 3600) : 0;

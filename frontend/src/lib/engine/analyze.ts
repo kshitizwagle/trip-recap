@@ -14,6 +14,8 @@ export interface AnalyzeOptions {
   startLocation: string | null;
   endLocation: string | null;
   returnToStart: boolean;
+  /** Photo spots closer than this to the previous stop shape the road instead of becoming stops. */
+  stopDistanceMeters?: number;
 }
 
 export interface AnalyzeServices {
@@ -118,7 +120,7 @@ export async function analyzeMedia(
   const start = await resolveLocation(options.startLocation, services);
   const end = options.returnToStart ? null : await resolveLocation(options.endLocation, services);
   const tripGapSeconds = options.keepAsOneTrip || options.returnToStart ? 36500 * 86400 : 12 * 3600;
-  const trips = new TripBuilder({tripGapSeconds}).build(media);
+  const trips = new TripBuilder({tripGapSeconds, stopDistanceMeters: options.stopDistanceMeters}).build(media);
   if (!trips.length) throw new Error("No supported media metadata could be analyzed");
 
   const results: AnalyzedTrip[] = [];
@@ -181,6 +183,7 @@ export function tripPayload(
       place: places[observation.id] ?? "Unknown place",
       media_ids: observation.media_ids,
       media_files: observation.media_ids.map((id) => filenames.get(id)).filter((name): name is string => !!name),
+      via: observation.via ?? [],
       progress: progresses[index] ?? 0,
     })),
     place_names: places,
@@ -217,12 +220,17 @@ export async function applyStopEdits(
   services: Pick<AnalyzeServices, "router" | "now">,
 ): Promise<AnalyzedTrip> {
   const byId = new Map(analyzed.trip.observations.map((item) => [item.id, item]));
+  const previousId = new Map(analyzed.trip.observations.map((item, index) => [item.id, analyzed.trip.observations[index - 1]?.id]));
   const fallbackTime = analyzed.trip.started_at ?? analyzed.trip.observations[0]?.arrival ?? (services.now?.() ?? new Date()).toISOString();
   const observations: Observation[] = [];
   for (const stop of stops) {
     if (stop.kind === "observation") {
       const existing = byId.get(stop.id);
-      if (existing) observations.push(existing);
+      // Waypoints belong to the leg they were photographed on; a stop with a new predecessor drops them.
+      if (existing) {
+        const sameLeg = previousId.get(existing.id) === observations[observations.length - 1]?.id;
+        observations.push(sameLeg || !existing.via?.length ? existing : {...existing, via: []});
+      }
       continue;
     }
     if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) continue;

@@ -135,6 +135,7 @@ export async function analyzeSession(request: AnalyzeSessionPayload): Promise<An
       startLocation: request.start_location,
       endLocation: request.end_location,
       returnToStart: request.return_to_start,
+      stopDistanceMeters: request.stop_distance_meters,
     },
     {router, forwardGeocode: (query) => geocoder.forward(query)},
   );

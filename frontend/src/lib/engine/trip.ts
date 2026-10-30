@@ -1,8 +1,8 @@
 // Port of backend/app/trip/builder.py.
 
-import {haversineMeters} from "./geo.ts";
+import {haversineMeters, pathMeters} from "./geo.ts";
 import {uuid5} from "./ids.ts";
-import {type MediaPoint, type Observation, type Trip, type TripStats, hasGps, timeMs} from "./models.ts";
+import {type MediaPoint, type Observation, type Trip, type TripStats, type Waypoint, hasGps, timeMs} from "./models.ts";
 
 export interface TripBuilderOptions {
   clusterDistanceMeters?: number;
@@ -10,6 +10,11 @@ export interface TripBuilderOptions {
   tripGapSeconds?: number;
   maxSpeedKph?: number;
   minRoutePointDistanceMeters?: number;
+  /**
+   * Photo spots closer than this to the last stop become waypoints the route passes through rather
+   * than stops of their own. 0 keeps every spot as a stop.
+   */
+  stopDistanceMeters?: number;
 }
 
 export const DEFAULT_TRIP_GAP_SECONDS = 12 * 3600;
@@ -42,13 +47,14 @@ function markSpeedOutliers(media: MediaPoint[], maxSpeedKph: number): MediaPoint
   return result;
 }
 
+/** Straight-line length of the leg into `to`, through the photo spots it passes. */
+export function legDistance(from: Observation, to: Observation): number {
+  return pathMeters([from, ...(to.via ?? []), to]);
+}
+
 export function observationDistance(observations: Observation[]): number {
   let total = 0;
-  for (let i = 1; i < observations.length; i += 1) {
-    const a = observations[i - 1];
-    const b = observations[i];
-    total += haversineMeters(a.latitude, a.longitude, b.latitude, b.longitude);
-  }
+  for (let i = 1; i < observations.length; i += 1) total += legDistance(observations[i - 1], observations[i]);
   return total;
 }
 
@@ -58,6 +64,7 @@ export class TripBuilder {
   readonly tripGapSeconds: number;
   readonly maxSpeedKph: number;
   readonly minRoutePointDistanceMeters: number;
+  readonly stopDistanceMeters: number;
 
   constructor(options: TripBuilderOptions = {}) {
     this.clusterDistanceMeters = options.clusterDistanceMeters ?? 150;
@@ -65,6 +72,7 @@ export class TripBuilder {
     this.tripGapSeconds = options.tripGapSeconds ?? DEFAULT_TRIP_GAP_SECONDS;
     this.maxSpeedKph = options.maxSpeedKph ?? 250;
     this.minRoutePointDistanceMeters = options.minRoutePointDistanceMeters ?? 50;
+    this.stopDistanceMeters = options.stopDistanceMeters ?? 0;
   }
 
   build(media: Iterable<MediaPoint>): Trip[] {
@@ -135,7 +143,39 @@ export class TripBuilder {
       longitude: cluster.reduce((sum, item) => sum + item.longitude, 0) / cluster.length,
       media_ids: cluster.map((item) => item.id),
     }));
-    return this.dedupeNegligibleRoutePoints(observations);
+    return this.selectStops(this.dedupeNegligibleRoutePoints(observations));
+  }
+
+  /**
+   * Keeps a spot as a stop only when it is at least `stopDistanceMeters` from the previous stop.
+   * The spots in between stay on the leg as waypoints, so the photos still shape the route.
+   * Spots after the last stop are all within reach of it and count as its photos, except when
+   * that would leave a single stop: then the last spot ends the route.
+   */
+  private selectStops(spots: Observation[]): Observation[] {
+    if (this.stopDistanceMeters <= 0 || spots.length < 3) return spots;
+    const asWaypoint = ({arrival, departure, latitude, longitude, media_ids}: Observation): Waypoint => ({arrival, departure, latitude, longitude, media_ids});
+    const stops: Observation[] = [spots[0]];
+    let pending: Observation[] = [];
+    for (const spot of spots.slice(1)) {
+      const last = stops[stops.length - 1];
+      if (haversineMeters(last.latitude, last.longitude, spot.latitude, spot.longitude) >= this.stopDistanceMeters) {
+        stops.push({...spot, via: pending.map(asWaypoint)});
+        pending = [];
+      } else {
+        pending.push(spot);
+      }
+    }
+    if (!pending.length) return stops;
+    if (stops.length === 1) {
+      const end = pending[pending.length - 1];
+      stops.push({...end, via: pending.slice(0, -1).map(asWaypoint)});
+      return stops;
+    }
+    const last = stops[stops.length - 1];
+    const mediaIds = [...last.media_ids, ...pending.flatMap((spot) => spot.media_ids)];
+    stops[stops.length - 1] = {...last, id: uuid5(mediaIds.join(":")), departure: pending[pending.length - 1].departure, media_ids: mediaIds};
+    return stops;
   }
 
   private dedupeNegligibleRoutePoints(observations: Observation[]): Observation[] {

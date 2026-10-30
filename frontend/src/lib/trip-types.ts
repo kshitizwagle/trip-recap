@@ -56,6 +56,14 @@ export interface TripDocument {
   media: TripMedia[];
 }
 
+export interface Waypoint {
+  arrival: string;
+  departure: string;
+  latitude: number;
+  longitude: number;
+  media_ids: string[];
+}
+
 export interface Observation {
   id: string;
   order: number;
@@ -67,6 +75,8 @@ export interface Observation {
   media_ids: string[];
   media_files: string[];
   progress: number;
+  /** Observed photo spots passed on the leg into this stop; the route goes through them without stopping. */
+  via: Waypoint[];
   /** Set for stops made from the start/end options rather than media or the stop editor. */
   endpoint?: "start" | "end" | "return" | null;
 }
@@ -99,6 +109,8 @@ export interface AnalyzeSessionPayload {
   start_location: string | null;
   end_location: string | null;
   return_to_start: boolean;
+  /** Photo spots closer than this to the previous stop shape the road instead of becoming stops. 0 keeps every spot. */
+  stop_distance_meters?: number;
 }
 
 export interface AnalyzeSessionResponse {

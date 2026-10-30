@@ -38,6 +38,9 @@ import {randomId} from "@/lib/engine/ids";
 const VEHICLES = [ARROW, "🛵", "🚗", "🏍️", "🚲"] as const;
 const PLACE_DETAILS = ["specific", "neighborhood", "city", "region"] as const;
 const SPEEDS = [0.5, 1, 2] as const;
+/** Metres a photo spot must be from the previous stop to become a stop; closer spots only shape the road. */
+const STOP_SPACINGS = [0, 500, 1000, 5000, 20000] as const;
+const spacingLabel = (meters: number) => (meters >= 1000 ? `${meters / 1000} km` : `${meters} m`);
 type Vehicle = (typeof VEHICLES)[number];
 type PlaceDetail = (typeof PLACE_DETAILS)[number];
 type JsonTab = "trip" | "route" | "timeline";
@@ -111,6 +114,7 @@ export default function TripRecapPage() {
   const [editingRoute, setEditingRoute] = useState(false);
   const [vehicle, setVehicle] = useState<Vehicle>(ARROW);
   const [placeDetail, setPlaceDetail] = useState<PlaceDetail>("neighborhood");
+  const [stopSpacing, setStopSpacing] = useState<number>(1000);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [analyzing, setAnalyzing] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
@@ -269,6 +273,7 @@ export default function TripRecapPage() {
         start_location: startLocation.trim() || null,
         end_location: returnToStart ? null : endLocation.trim() || null,
         return_to_start: returnToStart,
+        stop_distance_meters: stopSpacing,
       });
       const nextTrip = response.trips[0];
       if (!nextTrip) throw new Error("No trip could be built from this media");
@@ -286,7 +291,7 @@ export default function TripRecapPage() {
     } finally {
       setAnalyzing(false);
     }
-  }, [endLocation, keepAsOneTrip, readyToAnalyze, retainedRecords, returnToStart, sessionId, startLocation]);
+  }, [endLocation, keepAsOneTrip, readyToAnalyze, retainedRecords, returnToStart, sessionId, startLocation, stopSpacing]);
 
   // A start and end set on the landing page bracket the planned places.
   const plannedStops = useMemo(() => {
@@ -506,6 +511,21 @@ export default function TripRecapPage() {
         <CheckboxInput id="return-start" label="Return to the start" value={returnToStart} onChange={setReturnToStart} size="sm" />
         <CheckboxInput id="keep-one" label="Keep media together as one trip" value={keepAsOneTrip} onChange={setKeepAsOneTrip} size="sm" />
       </Stack>
+      {records.length > 0 && (
+        <div className="option-wide">
+          <Segmented
+            label="Stop spacing"
+            value={stopSpacing}
+            options={STOP_SPACINGS.map((value) => ({value, label: value === 0 ? "Off" : spacingLabel(value)}))}
+            onChange={setStopSpacing}
+          />
+          <p className="note">
+            {stopSpacing === 0
+              ? "Every photo spot is a stop."
+              : `Photos within ${spacingLabel(stopSpacing)} of the last stop shape the road without adding a stop.`}
+          </p>
+        </div>
+      )}
     </div>
   );
 

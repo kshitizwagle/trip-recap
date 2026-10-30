@@ -4,7 +4,29 @@ import {haversineMeters} from "./geo.ts";
 import type {Coordinate, Route, RouteSegment, Trip} from "./models.ts";
 
 export interface Router {
-  route(start: Coordinate, end: Coordinate, startObservationId: string, endObservationId: string): Promise<RouteSegment>;
+  /** One leg between two stops. `via` are observed points the road must pass through, in order. */
+  route(start: Coordinate, end: Coordinate, startObservationId: string, endObservationId: string, via?: Coordinate[]): Promise<RouteSegment>;
+}
+
+/** Most waypoints sent with one leg; the public OSRM demo rejects very long coordinate lists. */
+export const MAX_VIA_POINTS = 25;
+/** Waypoints closer than this to the previous point on the leg add nothing to the road's shape. */
+export const MIN_VIA_SPACING_METERS = 100;
+
+/** The leg's waypoints thinned for routing: no near-duplicates, and at most MAX_VIA_POINTS, spread evenly. */
+export function routingVia(start: Coordinate, via: Coordinate[], end: Coordinate): Coordinate[] {
+  const spaced: Coordinate[] = [];
+  let previous = start;
+  for (const point of via) {
+    if (haversineMeters(previous.latitude, previous.longitude, point.latitude, point.longitude) < MIN_VIA_SPACING_METERS) continue;
+    spaced.push(point);
+    previous = point;
+  }
+  while (spaced.length && haversineMeters(spaced[spaced.length - 1].latitude, spaced[spaced.length - 1].longitude, end.latitude, end.longitude) < MIN_VIA_SPACING_METERS) {
+    spaced.pop();
+  }
+  if (spaced.length <= MAX_VIA_POINTS) return spaced;
+  return Array.from({length: MAX_VIA_POINTS}, (_, index) => spaced[Math.round(((index + 0.5) * spaced.length) / MAX_VIA_POINTS - 0.5)]);
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -13,16 +35,16 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 export class RouteCache {
   private readonly entries = new Map<string, RouteSegment>();
 
-  static key(start: Coordinate, end: Coordinate, profile: string): string {
-    return `${start.latitude.toFixed(5)},${start.longitude.toFixed(5)}:${end.latitude.toFixed(5)},${end.longitude.toFixed(5)}:${profile}`;
+  static key(start: Coordinate, end: Coordinate, profile: string, via: Coordinate[] = []): string {
+    return [start, ...via, end].map((point) => `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`).join(":") + `:${profile}`;
   }
 
-  get(start: Coordinate, end: Coordinate, profile: string): RouteSegment | undefined {
-    return this.entries.get(RouteCache.key(start, end, profile));
+  get(start: Coordinate, end: Coordinate, profile: string, via: Coordinate[] = []): RouteSegment | undefined {
+    return this.entries.get(RouteCache.key(start, end, profile, via));
   }
 
-  put(start: Coordinate, end: Coordinate, segment: RouteSegment): void {
-    this.entries.set(RouteCache.key(start, end, segment.routing_profile), segment);
+  put(start: Coordinate, end: Coordinate, segment: RouteSegment, via: Coordinate[] = []): void {
+    this.entries.set(RouteCache.key(start, end, segment.routing_profile, via), segment);
   }
 }
 
@@ -57,13 +79,12 @@ export class OSRMRouter implements Router {
     this.sleep = options.sleep ?? defaultSleep;
   }
 
-  async route(start: Coordinate, end: Coordinate, startObservationId: string, endObservationId: string): Promise<RouteSegment> {
-    const cached = this.cache?.get(start, end, this.profile);
+  async route(start: Coordinate, end: Coordinate, startObservationId: string, endObservationId: string, via: Coordinate[] = []): Promise<RouteSegment> {
+    const cached = this.cache?.get(start, end, this.profile, via);
     if (cached) return {...cached, start_observation_id: startObservationId, end_observation_id: endObservationId};
 
-    const url =
-      `${this.baseUrl}/route/v1/${this.profile}/${start.longitude},${start.latitude};${end.longitude},${end.latitude}` +
-      "?overview=full&geometries=geojson&steps=false";
+    const coordinates = [start, ...via, end].map((point) => `${point.longitude},${point.latitude}`).join(";");
+    const url = `${this.baseUrl}/route/v1/${this.profile}/${coordinates}?overview=full&geometries=geojson&steps=false`;
     let payload: {code?: string; routes?: Array<{geometry?: {coordinates?: number[][]}; distance?: number; duration?: number}>} | null = null;
 
     for (let attempt = 0; attempt < this.maxAttempts; attempt += 1) {
@@ -85,18 +106,18 @@ export class OSRMRouter implements Router {
     const routes = payload?.routes ?? [];
     if (payload?.code !== "Ok" || !routes.length) throw new Error(`OSRM did not return a route: ${payload?.code}`);
     const route = routes[0];
-    const coordinates = route.geometry?.coordinates ?? [];
-    if (coordinates.length < 2) throw new Error("OSRM returned an invalid route geometry");
+    const line = route.geometry?.coordinates ?? [];
+    if (line.length < 2) throw new Error("OSRM returned an invalid route geometry");
     const segment: RouteSegment = {
       start_observation_id: startObservationId,
       end_observation_id: endObservationId,
-      geometry: coordinates.map(([longitude, latitude]) => ({latitude, longitude})),
+      geometry: line.map(([longitude, latitude]) => ({latitude, longitude})),
       distance_meters: Number(route.distance ?? 0),
       duration_seconds: Number(route.duration ?? 0),
       routing_profile: this.profile,
       inferred: true,
     };
-    this.cache?.put(start, end, segment);
+    this.cache?.put(start, end, segment, via);
     return segment;
   }
 }
@@ -106,14 +127,10 @@ export async function buildRoute(trip: Trip, router: Router): Promise<Route> {
   for (let i = 1; i < trip.observations.length; i += 1) {
     const start = trip.observations[i - 1];
     const end = trip.observations[i];
-    segments.push(
-      await router.route(
-        {latitude: start.latitude, longitude: start.longitude},
-        {latitude: end.latitude, longitude: end.longitude},
-        start.id,
-        end.id,
-      ),
-    );
+    const from = {latitude: start.latitude, longitude: start.longitude};
+    const to = {latitude: end.latitude, longitude: end.longitude};
+    const via = routingVia(from, (end.via ?? []).map(({latitude, longitude}) => ({latitude, longitude})), to);
+    segments.push(await router.route(from, to, start.id, end.id, via));
   }
   const geometry: Coordinate[] = [];
   segments.forEach((segment, index) => geometry.push(...(index === 0 ? segment.geometry : segment.geometry.slice(1))));

@@ -21,6 +21,18 @@ export interface MediaPoint {
   metadata_warnings: string[];
 }
 
+/**
+ * An observed photo spot passed on the way to a stop. The route goes through it, but it is too
+ * close to the previous stop to be a stop of its own.
+ */
+export interface Waypoint {
+  arrival: string;
+  departure: string;
+  latitude: number;
+  longitude: number;
+  media_ids: string[];
+}
+
 export interface Observation {
   id: string;
   arrival: string;
@@ -28,6 +40,8 @@ export interface Observation {
   latitude: number;
   longitude: number;
   media_ids: string[];
+  /** Photo spots passed on the leg that arrives here, in capture order. Absent or empty: a direct leg. */
+  via?: Waypoint[];
 }
 
 export interface TripStats {

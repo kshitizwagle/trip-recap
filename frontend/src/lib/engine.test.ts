@@ -508,3 +508,84 @@ test("a trip can be built from places alone, with nothing marked as observed", a
   assert.ok(moves.every((event) => Number(event.payload.duration_seconds) >= 0.5), "legs are paced by distance");
   await assert.rejects(analyzePlaces([], services), /at least one place/);
 });
+
+import {legDistance} from "./engine/trip.ts";
+import {MAX_VIA_POINTS, routingVia} from "./engine/routing.ts";
+
+/** A photo `meters` north of 40.75, -74.0, taken `minute` minutes in. */
+const north = (name: string, minute: number, meters: number) => point(name, minute, 40.75 + meters / 111_195, -74.0);
+
+test("stop spacing keeps close photo spots as waypoints on the leg, not stops", () => {
+  const media = [north("a", 0, 0), north("b", 5, 300), north("c", 10, 600), north("d", 15, 1500), north("e", 20, 1800), north("f", 25, 3000)];
+  const [every] = new TripBuilder().build(media);
+  assert.equal(every.observations.length, 6, "without a threshold every spot is a stop");
+
+  const [trip] = new TripBuilder({stopDistanceMeters: 1000}).build(media);
+  assert.deepEqual(trip.observations.map((item) => item.media_ids), [["a"], ["d"], ["f"]]);
+  assert.deepEqual(trip.observations[0].via ?? [], []);
+  assert.deepEqual(trip.observations[1].via?.map((item) => item.media_ids), [["b"], ["c"]]);
+  assert.deepEqual(trip.observations[2].via?.map((item) => item.media_ids), [["e"]]);
+  assert.equal(trip.observations[1].via?.[0].arrival, media[1].captured_at, "waypoints keep their observed capture time");
+  // The leg is measured through its waypoints, so the distance is the same as stopping at each spot.
+  close(trip.stats.distance_meters, every.stats.distance_meters, 1e-6);
+  close(legDistance(trip.observations[0], trip.observations[1]), haversineMeters(40.75, -74, 40.75 + 1500 / 111_195, -74), 1e-6);
+});
+
+test("stop spacing folds trailing spots into the last stop, but always leaves a route", () => {
+  const [trip] = new TripBuilder({stopDistanceMeters: 1000}).build([north("a", 0, 0), north("b", 10, 1500), north("c", 20, 1800), north("d", 30, 1900)]);
+  assert.deepEqual(trip.observations.map((item) => item.media_ids), [["a"], ["b", "c", "d"]]);
+  assert.equal(trip.observations[1].id, uuid5("b:c:d"));
+  assert.equal(trip.observations[1].departure, trip.media.find((item) => item.id === "d")?.captured_at);
+
+  const [walk] = new TripBuilder({stopDistanceMeters: 1000}).build([north("a", 0, 0), north("b", 10, 300), north("c", 20, 600)]);
+  assert.deepEqual(walk.observations.map((item) => item.media_ids), [["a"], ["c"]], "a trip inside the threshold still runs from first spot to last");
+  assert.deepEqual(walk.observations[1].via?.map((item) => item.media_ids), [["b"]]);
+});
+
+test("waypoints are thinned and capped before they go to the router", async () => {
+  const start = {latitude: 40.75, longitude: -74};
+  const end = {latitude: 40.75 + 5000 / 111_195, longitude: -74};
+  const at = (meters: number) => ({latitude: 40.75 + meters / 111_195, longitude: -74});
+  assert.deepEqual(routingVia(start, [at(40), at(1000), at(1050), at(2000), at(4950)], end), [at(1000), at(2000)]);
+  const dense = Array.from({length: 40}, (_, index) => at(110 + index * 110));
+  const capped = routingVia(start, dense, end);
+  assert.equal(capped.length, MAX_VIA_POINTS);
+  assert.deepEqual(capped[0], dense[0]);
+  assert.ok(capped.every((item, index) => index === 0 || item.latitude > capped[index - 1].latitude), "order is kept");
+
+  const urls: string[] = [];
+  const router = new OSRMRouter({
+    fetch: async (url) => {
+      urls.push(url);
+      return new Response(JSON.stringify({code: "Ok", routes: [{geometry: {coordinates: [[-74, 40.75], [-74, 40.76]]}, distance: 5000, duration: 300}]}));
+    },
+  });
+  const [trip] = new TripBuilder({stopDistanceMeters: 1000}).build([north("a", 0, 0), north("b", 10, 1000 - 1), north("c", 20, 2500)]);
+  assert.equal(trip.observations.length, 2);
+  const route = await buildRoute(trip, router);
+  assert.ok(route.segments.every((segment) => segment.inferred));
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0].split("/route/v1/driving/")[1].split("?")[0].split(";").length, 3, "the leg goes start; waypoint; end");
+});
+
+test("reordering drops waypoints from legs whose start changed", async () => {
+  const media = [north("a", 0, 0), north("b", 5, 500), north("c", 10, 1500), north("d", 15, 2000), north("e", 20, 3000)];
+  const services = {
+    router: {route: async (start: {latitude: number; longitude: number}, end: {latitude: number; longitude: number}, s: string, e: string) => ({
+      start_observation_id: s, end_observation_id: e, geometry: [start, end], distance_meters: 1000, duration_seconds: 60, routing_profile: "driving", inferred: true as const,
+    })},
+    forwardGeocode: async () => null,
+  };
+  const [analyzed] = await analyzeMedia(media, {keepAsOneTrip: true, startLocation: null, endLocation: null, returnToStart: false, stopDistanceMeters: 1000}, services);
+  const [a, c, e] = analyzed.trip.observations.map((item) => item.id);
+  assert.equal(analyzed.trip.observations[1].via?.length, 1);
+  assert.equal(analyzed.trip.observations[2].via?.length, 1);
+  const payload = tripPayload(analyzed, {}, () => ({url: "", preview_url: ""}));
+  assert.deepEqual(payload.observations[1].via.map((item) => item.media_ids), [["b"]], "waypoints are serialized with the stop");
+
+  const edited = await applyStopEdits(analyzed, [{kind: "observation", id: a}, {kind: "observation", id: e}, {kind: "observation", id: c}], services);
+  assert.deepEqual(edited.trip.observations[1].via, [], "e now follows a, so its waypoint no longer lies on the leg");
+  assert.deepEqual(edited.trip.observations[2].via, [], "c now follows e");
+  const kept = await applyStopEdits(analyzed, [{kind: "observation", id: a}, {kind: "observation", id: c}], services);
+  assert.equal(kept.trip.observations[1].via?.length, 1, "an unchanged leg keeps its waypoint");
+});
