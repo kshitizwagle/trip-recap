@@ -60,13 +60,36 @@ async function pickEncoderConfig(width: number, height: number, fps: number): Pr
   throw new Error(`This browser cannot encode H.264 at ${width}×${height}. Try a lower quality, or a recent Chrome, Edge or Safari.`);
 }
 
-function waitForEvent(map: maplibregl.Map, event: "load" | "render", timeoutMs: number): Promise<void> {
+function nextMapEvent(map: maplibregl.Map, event: "data" | "styledata", timeoutMs: number): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, timeoutMs);
-    map.once(event, () => {
+    const done = () => {
       clearTimeout(timer);
+      map.off(event, done);
       resolve();
-    });
+    };
+    const timer = setTimeout(done, timeoutMs);
+    map.on(event, done);
+  });
+}
+
+/** Lets the page paint progress between frames. Message tasks, unlike timers, are not slowed in hidden tabs. */
+function yieldToPage(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => resolve();
+    channel.port2.postMessage(null);
+  });
+}
+
+function nextDequeue(encoder: VideoEncoder, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      encoder.removeEventListener("dequeue", done);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    encoder.addEventListener("dequeue", done);
   });
 }
 
@@ -117,18 +140,21 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
     },
   });
 
+  // Renders on demand instead of on animation frames, which a hidden tab or covered window does not
+  // get, and waits on tile arrivals instead of polling with timers, which hidden tabs slow down.
   const settle = async (maxMs: number) => {
-    map.triggerRepaint();
-    await waitForEvent(map, "render", 250);
+    map.redraw();
     const started = performance.now();
     while (!(map.loaded() && map.areTilesLoaded()) && performance.now() - started < maxMs) {
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await nextMapEvent(map, "data", 100);
+      map.redraw();
     }
   };
 
   try {
     encoder.configure(config);
-    await waitForEvent(map, "load", 20_000);
+    const styleStarted = performance.now();
+    while (!map.isStyleLoaded() && performance.now() - styleStarted < 20_000) await nextMapEvent(map, "styledata", 250);
     checkAbort();
 
     const canvas = document.createElement("canvas");
@@ -165,8 +191,9 @@ export async function exportRecapVideo(data: TripData, options: ExportOptions): 
       const frame = new VideoFrame(canvas, {timestamp: Math.round((index * 1_000_000) / fps), duration: Math.round(1_000_000 / fps)});
       encoder.encode(frame, {keyFrame: index % (fps * 2) === 0});
       frame.close();
-      while (encoder.encodeQueueSize > 4) await new Promise((resolve) => setTimeout(resolve, 5));
+      while (encoder.encodeQueueSize > 4) await nextDequeue(encoder, 50);
       onProgress?.({stage: "rendering", frame: index + 1, frames});
+      await yieldToPage();
     }
 
     onProgress?.({stage: "finishing", frame: frames, frames});
